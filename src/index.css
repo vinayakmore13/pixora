@@ -1,0 +1,61 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Noto+Serif:ital,wght@0,400;0,700;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Noto Serif", serif;
+  --font-display: "Plus Jakarta Sans", sans-serif;
+
+  --color-surface: #f7f9fc;
+  --color-surface-container-low: #f2f4f7;
+  --color-surface-container-lowest: #ffffff;
+  --color-primary: #ae2f34;
+  --color-primary-container: #ff6b6b;
+  --color-on-surface: #191c1e;
+  --color-on-surface-variant: #584140;
+  --color-outline-variant: #e0bfbd;
+}
+
+@layer base {
+  body {
+    @apply bg-surface text-on-surface font-sans;
+  }
+}
+
+@layer components {
+  .silk-shadow {
+    box-shadow: 0px 10px 40px rgba(25, 28, 30, 0.04);
+  }
+  
+  .signature-gradient {
+    background: linear-gradient(135deg, #ae2f34 0%, #ff6b6b 100%);
+  }
+
+  .glass-nav {
+    background: rgba(247, 249, 252, 0.8);
+    backdrop-filter: blur(12px);
+  }
+
+  /* Mobile touch-friendly targets */
+  @screen sm {
+    .touch-target {
+      min-height: 44px;
+      min-width: 44px;
+    }
+    
+    .touch-target-heart {
+      min-height: 40px;
+      min-width: 40px;
+    }
+    
+    .touch-target-compare {
+      min-height: 44px;
+      min-width: 80px;
+    }
+    
+    .touch-target-close {
+      min-height: 40px;
+      min-width: 40px;
+    }
+  }
+}
