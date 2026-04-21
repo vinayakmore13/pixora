@@ -5,11 +5,18 @@ import { extractFaceDescriptor } from '../lib/faceApi';
 import { supabase } from '../lib/supabaseClient';
 
 interface SelfieCaptureProps {
-  onCaptureComplete: (img: HTMLImageElement) => void;
+  onCaptureComplete: (img: HTMLImageElement, descriptor?: Float32Array) => void;
   onClose: () => void;
+  title?: string;
+  requireAuth?: boolean;
 }
 
-export function SelfieCapture({ onCaptureComplete, onClose }: SelfieCaptureProps) {
+export function SelfieCapture({ 
+  onCaptureComplete, 
+  onClose, 
+  title = "Set Up Face ID",
+  requireAuth = true 
+}: SelfieCaptureProps) {
   const webcamRef = useRef<Webcam>(null);
   const [imgSrc, setImgSrc] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -37,8 +44,9 @@ export function SelfieCapture({ onCaptureComplete, onClose }: SelfieCaptureProps
       const img = new Image();
       img.src = imgSrc;
 
-      await new Promise((resolve) => {
+      await new Promise((resolve, reject) => {
         img.onload = resolve;
+        img.onerror = reject;
       });
 
       const descriptor = await extractFaceDescriptor(img);
@@ -49,22 +57,23 @@ export function SelfieCapture({ onCaptureComplete, onClose }: SelfieCaptureProps
         return;
       }
 
-      // Format descriptor to match pgvector format: '[val1, val2, ...]'
-      const vectorString = `[${Array.from(descriptor).join(',')}]`;
+      // If requireAuth is true, we save to the profile
+      if (requireAuth) {
+        const vectorString = `[${Array.from(descriptor).join(',')}]`;
+        const { data: { user } } = await supabase.auth.getUser();
 
-      const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error("Not authenticated");
 
-      if (!user) throw new Error("Not authenticated");
+        // Save to Supabase profiles
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update({ selfie_descriptor: vectorString })
+          .eq('id', user.id);
 
-      // Save to Supabase profiles (Used for local pgvector fallback)
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({ selfie_descriptor: vectorString })
-        .eq('id', user.id);
+        if (updateError) throw updateError;
+      }
 
-      if (updateError) throw updateError;
-
-      onCaptureComplete(img);
+      onCaptureComplete(img, descriptor);
     } catch (err: any) {
       console.error(err);
       setError(err.message || "Failed to process face");
@@ -77,7 +86,7 @@ export function SelfieCapture({ onCaptureComplete, onClose }: SelfieCaptureProps
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-xl max-w-md w-full overflow-hidden">
         <div className="flex items-center justify-between p-4 border-b">
-          <h2 className="text-xl font-semibold text-gray-900">Set Up Face ID</h2>
+          <h2 className="text-xl font-semibold text-gray-900">{title}</h2>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
             <X className="w-5 h-5" />
           </button>
