@@ -21,7 +21,7 @@ import { SignUp } from "./components/SignUp";
 
 // Lazy load main app routes
 const LandingPage = lazy(() =>
-  import("./components/LandingPage").then((m) => ({ default: m.LandingPage })),
+  import("./components/AnimatedLandingPage").then((m) => ({ default: m.AnimatedLandingPage })),
 );
 const Dashboard = lazy(() =>
   import("./components/Dashboard").then((m) => ({ default: m.Dashboard })),

@@ -16,12 +16,22 @@ import { useAuth } from "../contexts/AuthContext";
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const [signingOut, setSigningOut] = React.useState(false);
+  const [isScrolled, setIsScrolled] = React.useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const { user, profile, signOut } = useAuth();
   const isDashboard =
     location.pathname.startsWith("/dashboard") ||
     location.pathname.startsWith("/event");
+  const isHome = location.pathname === "/";
+
+  React.useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 20);
+    };
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   const handleSignOut = async () => {
     if (signingOut) return;
@@ -114,16 +124,16 @@ export function Header() {
   }
 
   return (
-    <nav className="fixed top-0 w-full z-50 glass-nav">
-      <div className="flex justify-between items-center px-8 py-4 max-w-7xl mx-auto">
+    <nav className={`fixed top-0 w-full z-50 transition-all duration-500 ${isHome && !isScrolled ? 'bg-transparent py-6' : 'glass-nav py-4 shadow-sm'}`}>
+      <div className="flex justify-between items-center px-8 max-w-7xl mx-auto">
         <div className="flex items-center gap-3">
           {location.pathname !== '/' && (
-            <button onClick={() => navigate(-1)} className="text-on-surface-variant hover:text-primary transition-colors">
+            <button onClick={() => navigate(-1)} className={`transition-colors ${isHome && !isScrolled ? 'text-white' : 'text-on-surface-variant hover:text-primary'}`}>
               <ArrowLeft size={20} />
             </button>
           )}
           <Link to="/" className="flex items-center gap-2">
-            <span className="text-xl font-bold tracking-tight text-on-surface">
+            <span className={`text-2xl font-serif font-bold tracking-tight transition-colors ${isHome && !isScrolled ? 'text-white' : 'text-primary'}`}>
               Pixora
             </span>
           </Link>
@@ -132,25 +142,25 @@ export function Header() {
         <div className="hidden md:flex items-center gap-8">
           <Link
             to="/"
-            className="font-medium text-sm tracking-wide text-primary border-b-2 border-primary pb-1"
+            className={`font-medium text-sm tracking-wide transition-colors ${isHome && !isScrolled ? 'text-white border-b-2 border-white pb-1' : 'text-primary border-b-2 border-primary pb-1'}`}
           >
             For Hosts
           </Link>
           <Link
             to="/marketplace"
-            className="font-medium text-sm tracking-wide text-on-surface/70 hover:text-primary transition-colors"
+            className={`font-medium text-sm tracking-wide transition-colors ${isHome && !isScrolled ? 'text-white/80 hover:text-white' : 'text-on-surface/70 hover:text-primary'}`}
           >
             For Photographers
           </Link>
           <Link
             to="/features"
-            className="font-medium text-sm tracking-wide text-on-surface/70 hover:text-primary transition-colors"
+            className={`font-medium text-sm tracking-wide transition-colors ${isHome && !isScrolled ? 'text-white/80 hover:text-white' : 'text-on-surface/70 hover:text-primary'}`}
           >
             Features
           </Link>
           <Link
             to="/pricing"
-            className="font-medium text-sm tracking-wide text-on-surface/70 hover:text-primary transition-colors"
+            className={`font-medium text-sm tracking-wide transition-colors ${isHome && !isScrolled ? 'text-white/80 hover:text-white' : 'text-on-surface/70 hover:text-primary'}`}
           >
             Pricing
           </Link>
@@ -162,14 +172,14 @@ export function Header() {
               {profile?.is_admin ? (
                 <Link
                   to="/partner/dashboard"
-                  className="font-medium text-sm tracking-wide text-primary hover:text-primary/80 transition-colors px-4 py-2 border border-primary/20 rounded-full"
+                  className={`font-medium text-sm tracking-wide transition-colors px-4 py-2 border rounded-full ${isHome && !isScrolled ? 'text-white border-white/40 hover:bg-white/10' : 'text-primary border-primary/20 hover:border-primary/40'}`}
                 >
                   Admin Portal
                 </Link>
               ) : (
                 <Link
                   to="/dashboard"
-                  className="font-medium text-sm tracking-wide text-on-surface/70 hover:text-primary transition-colors px-4 py-2"
+                  className={`font-medium text-sm tracking-wide transition-colors px-4 py-2 ${isHome && !isScrolled ? 'text-white/80 hover:text-white' : 'text-on-surface/70 hover:text-primary'}`}
                 >
                   Dashboard
                 </Link>
@@ -220,13 +230,13 @@ export function Header() {
             <>
               <Link
                 to="/signin"
-                className="font-medium text-sm tracking-wide text-on-surface/70 hover:text-primary transition-colors px-4 py-2"
+                className={`font-medium text-sm tracking-wide transition-colors px-4 py-2 ${isHome && !isScrolled ? 'text-white/80 hover:text-white' : 'text-on-surface/70 hover:text-primary'}`}
               >
                 Sign In
               </Link>
               <Link
                 to="/signup"
-                className="signature-gradient text-white px-6 py-2.5 rounded-full font-medium text-sm tracking-wide active:scale-95 duration-200 shadow-sm"
+                className={`px-6 py-2.5 rounded-full font-medium text-sm tracking-wide active:scale-95 duration-200 shadow-sm transition-all ${isHome && !isScrolled ? 'bg-white text-primary hover:bg-white/90' : 'signature-gradient text-white hover:brightness-110'}`}
               >
                 Get Started
               </Link>
