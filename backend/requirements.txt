@@ -6,6 +6,7 @@ redis==5.0.1
 supabase==2.3.4
 python-dotenv==1.0.0
 requests==2.31.0
-deepface==0.0.79 # Fallback local ML
-
+deepface>=0.0.92
+tensorflow>=2.15.0
+tf-keras>=2.15.0
 qrcode[pil]==7.4.2
