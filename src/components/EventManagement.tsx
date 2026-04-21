@@ -285,7 +285,7 @@ export function EventManagement() {
               </div>
               <button
                 onClick={() => {
-                  const url = `${window.location.origin}/e/${event.guest_qr_code}`;
+                  const url = `${window.location.origin}/e/${event.guest_qr_code || event.id}`;
                   navigator.clipboard.writeText(url);
                   setCopied(true);
                   setTimeout(() => setCopied(false), 2000);
@@ -490,11 +490,11 @@ export function EventManagement() {
                 <div className="bg-surface-container-low p-6 rounded-3xl flex flex-col items-center mb-6">
                   <div className="bg-white p-4 rounded-2xl shadow-sm mb-4">
                     <img
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(`${window.location.origin}/e/${event.guest_qr_code}`)}`}
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(`${window.location.origin}/e/${event.guest_qr_code || event.id}`)}`}
                       alt="Event QR Code"
                       width={160}
                       height={160}
-                      className="rounded-lg"
+                      className="rounded-lg shadow-sm"
                       id="event-qr-img"
                     />
                   </div>
@@ -502,12 +502,12 @@ export function EventManagement() {
                     Scan to upload photos
                   </p>
                   <p className="text-2xl font-mono font-bold text-on-surface tracking-widest mb-4">
-                    {event.guest_qr_code}
+                    {event.guest_qr_code || '---'}
                   </p>
                   <div className="flex gap-2 w-full">
                     <a
-                      href={`https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(`${window.location.origin}/e/${event.guest_qr_code}`)}&format=png`}
-                      download={`qr-${event.guest_qr_code}.png`}
+                      href={`https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(`${window.location.origin}/e/${event.guest_qr_code || event.id}`)}&format=png`}
+                      download={`qr-${event.guest_qr_code || event.id}.png`}
                       className="flex-1 bg-on-surface text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-on-surface/90 transition-all"
                     >
                       <Download size={16} />
@@ -515,7 +515,7 @@ export function EventManagement() {
                     </a>
                     <button
                       onClick={() => {
-                        const url = `${window.location.origin}/e/${event.guest_qr_code}`;
+                        const url = `${window.location.origin}/e/${event.guest_qr_code || event.id}`;
                         if (navigator.share) {
                           navigator.share({ title: event.name, url });
                         } else {

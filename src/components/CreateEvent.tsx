@@ -57,7 +57,7 @@ export function CreateEvent() {
   const [copied, setCopied] = useState(false);
   const [createdEvent, setCreatedEvent] = useState<{
     id: string;
-    qr_code: string;
+    guest_qr_code: string;
     upload_password: string;
   } | null>(null);
 
@@ -270,7 +270,7 @@ export function CreateEvent() {
       // Success! Show the QR code and password
       setCreatedEvent({
         id: data.id,
-        qr_code: guestQRCode,
+        guest_qr_code: guestQRCode,
         upload_password: uploadPassword,
       });
 
@@ -346,7 +346,7 @@ export function CreateEvent() {
               {/* QR Code Display (You can add actual QR code library here) */}
               <div className="bg-surface-container-high p-6 rounded-2xl mb-6 flex items-center justify-center">
                 <div className="text-4xl font-mono font-bold text-primary">
-                  {createdEvent.qr_code}
+                  {createdEvent.guest_qr_code}
                 </div>
               </div>
 
@@ -360,7 +360,7 @@ export function CreateEvent() {
               <button
                 onClick={() =>
                   copyToClipboard(
-                    `${window.location.origin}/e/${createdEvent.qr_code}`,
+                    `${window.location.origin}/e/${createdEvent.guest_qr_code}`,
                   )
                 }
                 className="w-full bg-primary/10 text-primary py-3 rounded-xl font-medium hover:bg-primary/20 transition-all flex items-center justify-center gap-2"

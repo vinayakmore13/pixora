@@ -122,18 +122,40 @@ export function PublicEventPage() {
                 return;
             }
 
-            const { data, error: fetchError } = await supabase
+            const cleanCode = qrCode.trim();
+            console.log(`[PublicEventPage] Attempting to fetch event with code: "${cleanCode}"`);
+
+            // Try 1: Match against guest_qr_code (case-insensitive)
+            let { data, error: fetchError } = await supabase
                 .from('events')
                 .select('*')
-                .eq('guest_qr_code', qrCode);
+                .ilike('guest_qr_code', cleanCode)
+                .limit(1);
+
+            // Try 2: Fallback to matching against ID if no guest_qr_code match and it looks like a UUID
+            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+            if ((!data || data.length === 0) && uuidRegex.test(cleanCode)) {
+                console.log('[PublicEventPage] No short code match, trying fallback UUID match');
+                const { data: idData, error: idError } = await supabase
+                    .from('events')
+                    .select('*')
+                    .eq('id', cleanCode)
+                    .limit(1);
+                
+                if (!idError && idData && idData.length > 0) {
+                    data = idData;
+                }
+            }
 
             if (fetchError) throw fetchError;
 
             if (!data || data.length === 0) {
+                console.warn(`[PublicEventPage] Event not found for code: "${cleanCode}"`);
                 setError('Event not found. Please check the QR code or link.');
                 return;
             }
 
+            console.log('[PublicEventPage] Event found:', data[0].name);
             setEvent(data[0]);
         } catch (err) {
             console.error('[PublicEventPage] Error fetching event:', err);
