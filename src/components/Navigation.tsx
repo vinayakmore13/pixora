@@ -246,14 +246,52 @@ export function Header() {
               </Link>
               <Link
                 to="/signup"
-                className={`px-6 py-2.5 rounded-full font-medium text-sm tracking-wide active:scale-95 duration-200 shadow-sm transition-all ${isHome && !isScrolled ? 'bg-white text-primary hover:bg-white/90' : 'signature-gradient text-white hover:brightness-110'}`}
+                className={`hidden sm:block px-6 py-2.5 rounded-full font-medium text-sm tracking-wide active:scale-95 duration-200 shadow-sm transition-all ${isHome && !isScrolled ? 'bg-white text-primary hover:bg-white/90' : 'signature-gradient text-white hover:brightness-110'}`}
               >
                 Get Started
               </Link>
             </>
           )}
+
+          {/* Mobile Menu Toggle */}
+          <button
+            onClick={() => setIsMenuOpen(!isMenuOpen)}
+            className={`p-2 rounded-lg md:hidden transition-colors ${isHome && !isScrolled ? 'text-white hover:bg-white/10' : 'text-on-surface-variant hover:bg-surface-container-low'}`}
+          >
+            <Menu size={24} />
+          </button>
         </div>
       </div>
+
+      {/* Mobile Menu Dropdown */}
+      {isMenuOpen && (
+        <div className="md:hidden glass-nav mt-2 mx-4 rounded-2xl border border-outline-variant/10 shadow-xl overflow-hidden animate-in slide-in-from-top-4 duration-300">
+          <div className="p-4 space-y-4">
+            <Link to="/" onClick={() => setIsMenuOpen(false)} className="block font-medium text-on-surface hover:text-primary transition-colors">For Hosts</Link>
+            <Link to="/marketplace" onClick={() => setIsMenuOpen(false)} className="block font-medium text-on-surface hover:text-primary transition-colors">For Photographers</Link>
+            <Link to="/features" onClick={() => setIsMenuOpen(false)} className="block font-medium text-on-surface hover:text-primary transition-colors">Features</Link>
+            <Link to="/pricing" onClick={() => setIsMenuOpen(false)} className="block font-medium text-on-surface hover:text-primary transition-colors">Pricing</Link>
+            {!user && (
+              <div className="pt-4 border-t border-outline-variant/10 grid grid-cols-2 gap-4">
+                <Link 
+                  to="/signin" 
+                  onClick={() => setIsMenuOpen(false)}
+                  className="px-4 py-2 text-center font-medium text-on-surface border border-outline-variant/20 rounded-xl"
+                >
+                  Sign In
+                </Link>
+                <Link 
+                  to="/signup" 
+                  onClick={() => setIsMenuOpen(false)}
+                  className="px-4 py-2 text-center font-medium text-white signature-gradient rounded-xl"
+                >
+                  Sign Up
+                </Link>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </nav>
   );
 }
