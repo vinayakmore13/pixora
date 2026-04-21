@@ -1,0 +1,32 @@
+services:
+  # 1. Frontend - React (Static Site)
+  - type: static
+    name: pixora-frontend
+    env: static
+    buildCommand: npm install && npm run download:models && npm run build
+    staticPublishPath: ./dist
+    envVars:
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false
+      - key: VITE_BACKEND_URL
+        fromService:
+          type: web
+          name: pixora-backend
+          property: host
+
+  # 2. Backend - FastAPI (Web Service)
+  - type: web
+    name: pixora-backend
+    env: python
+    plan: starter # Deepface requires > 512MB RAM
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: cd backend && gunicorn -k uvicorn.workers.UvicornWorker main:app --bind 0.0.0.0:$PORT
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: PYTHON_VERSION
+        value: 3.10.0
