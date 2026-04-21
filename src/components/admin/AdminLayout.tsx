@@ -10,11 +10,14 @@ import {
   MessageSquare,
   Search,
   Settings,
-  Users
+  Users,
+  Menu
 } from 'lucide-react';
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { useLayout } from '../../contexts/LayoutContext';
+import { cn } from '../../lib/utils';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -25,6 +28,7 @@ export function AdminLayout({ children, title }: AdminLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const { profile, signOut } = useAuth();
+  const { isSidebarOpen, setIsSidebarOpen, isDesktopCollapsed, toggleSidebar } = useLayout();
 
   const handleSignOut = async () => {
     await signOut();
@@ -41,9 +45,21 @@ export function AdminLayout({ children, title }: AdminLayoutProps) {
   ];
 
   return (
-    <div className="min-h-screen bg-surface-container-lowest flex">
+    <div className="min-h-screen bg-surface-container-lowest flex overflow-x-hidden">
+      {/* Backdrop for mobile */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/20 backdrop-blur-sm z-30 lg:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-outline-variant/10 flex flex-col fixed inset-y-0">
+      <aside className={cn(
+        "w-64 bg-white border-r border-outline-variant/10 flex flex-col fixed inset-y-0 z-40 transition-all duration-300 ease-in-out",
+        isSidebarOpen ? "translate-x-0" : "-translate-x-full",
+        isDesktopCollapsed ? "lg:-translate-x-full" : "lg:translate-x-0"
+      )}>
         <div className="p-6 border-b border-outline-variant/10">
           <Link to="/" className="text-2xl font-serif font-bold text-primary tracking-tighter">Pixora</Link>
           <p className="text-[10px] uppercase tracking-[0.2em] text-primary/60 font-medium mt-1">Partner Portal</p>
@@ -89,14 +105,24 @@ export function AdminLayout({ children, title }: AdminLayoutProps) {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-grow ml-64 flex flex-col min-h-screen">
+      <main className={cn(
+        "flex-grow flex flex-col min-h-screen transition-all duration-300",
+        isDesktopCollapsed ? "lg:ml-0" : "lg:ml-64"
+      )}>
         {/* Header */}
         <header className="h-20 bg-white/80 backdrop-blur-md border-b border-outline-variant/10 sticky top-0 z-40 px-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
+            <button 
+              onClick={toggleSidebar}
+              className="p-2 -ml-2 text-on-surface-variant hover:text-primary hover:bg-surface-container rounded-full transition-colors"
+              aria-label="Toggle Sidebar"
+            >
+              <Menu size={20} />
+            </button>
             {location.pathname !== '/partner/dashboard' && (
               <button 
                 onClick={() => navigate(-1)} 
-                className="p-2 -ml-2 text-on-surface-variant hover:text-primary hover:bg-surface-container rounded-full transition-colors"
+                className="p-2 text-on-surface-variant hover:text-primary hover:bg-surface-container rounded-full transition-colors"
                 aria-label="Go back"
               >
                 <ArrowLeft size={20} />
