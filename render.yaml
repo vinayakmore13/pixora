@@ -1,4 +1,8 @@
 services:
+  # Global settings
+  - key: PYTHON_VERSION
+    value: 3.11.0
+
   # 1. Frontend - React (Static Site)
   - type: static
     name: pixora-frontend
