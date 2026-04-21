@@ -10,6 +10,7 @@ import { LoadingSpinner } from "./components/LoadingSpinner";
 import { Footer, Header } from "./components/Navigation";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { AuthProvider } from "./contexts/AuthContext";
+import { LayoutProvider } from "./contexts/LayoutContext";
 
 // Eager load auth components
 import { ForgotPassword } from "./components/ForgotPassword";
@@ -131,7 +132,8 @@ export default function App() {
   return (
     <ErrorBoundary>
       <AuthProvider>
-        <Router>
+        <LayoutProvider>
+          <Router>
           <div className="min-h-screen flex flex-col">
             <Routes>
               {/* Auth routes without common header/footer */}
@@ -150,9 +152,10 @@ export default function App() {
             </Routes>
           </div>
         </Router>
-      </AuthProvider>
-    </ErrorBoundary>
-  );
+      </LayoutProvider>
+    </AuthProvider>
+  </ErrorBoundary>
+);
 }
 
 function AppLayout() {

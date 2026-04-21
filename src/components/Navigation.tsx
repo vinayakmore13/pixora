@@ -8,12 +8,15 @@ import {
   Settings,
   Share2,
   MessageCircle,
+  Menu,
 } from "lucide-react";
 import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { useLayout } from "../contexts/LayoutContext";
 
 export function Header() {
+  const { toggleSidebar } = useLayout();
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const [signingOut, setSigningOut] = React.useState(false);
   const [isScrolled, setIsScrolled] = React.useState(false);
@@ -49,6 +52,13 @@ export function Header() {
       <nav className="fixed top-0 w-full z-50 glass-nav shadow-[0_8px_32px_rgba(0,0,0,0.05)]">
         <div className="flex justify-between items-center w-full px-8 py-4 max-w-full">
           <div className="flex items-center gap-4">
+            <button 
+              onClick={toggleSidebar}
+              className="p-2 -ml-2 text-on-surface-variant hover:text-primary transition-colors lg:hidden"
+              aria-label="Toggle Sidebar"
+            >
+              <Menu size={24} />
+            </button>
             {location.pathname !== '/dashboard' && (
               <button onClick={() => navigate(-1)} className="text-on-surface-variant hover:text-primary transition-colors">
                 <ArrowLeft size={20} />
@@ -236,14 +246,52 @@ export function Header() {
               </Link>
               <Link
                 to="/signup"
-                className={`px-6 py-2.5 rounded-full font-medium text-sm tracking-wide active:scale-95 duration-200 shadow-sm transition-all ${isHome && !isScrolled ? 'bg-white text-primary hover:bg-white/90' : 'signature-gradient text-white hover:brightness-110'}`}
+                className={`hidden sm:block px-6 py-2.5 rounded-full font-medium text-sm tracking-wide active:scale-95 duration-200 shadow-sm transition-all ${isHome && !isScrolled ? 'bg-white text-primary hover:bg-white/90' : 'signature-gradient text-white hover:brightness-110'}`}
               >
                 Get Started
               </Link>
             </>
           )}
+
+          {/* Mobile Menu Toggle */}
+          <button
+            onClick={() => setIsMenuOpen(!isMenuOpen)}
+            className={`p-2 rounded-lg md:hidden transition-colors ${isHome && !isScrolled ? 'text-white hover:bg-white/10' : 'text-on-surface-variant hover:bg-surface-container-low'}`}
+          >
+            <Menu size={24} />
+          </button>
         </div>
       </div>
+
+      {/* Mobile Menu Dropdown */}
+      {isMenuOpen && (
+        <div className="md:hidden glass-nav mt-2 mx-4 rounded-2xl border border-outline-variant/10 shadow-xl overflow-hidden animate-in slide-in-from-top-4 duration-300">
+          <div className="p-4 space-y-4">
+            <Link to="/" onClick={() => setIsMenuOpen(false)} className="block font-medium text-on-surface hover:text-primary transition-colors">For Hosts</Link>
+            <Link to="/marketplace" onClick={() => setIsMenuOpen(false)} className="block font-medium text-on-surface hover:text-primary transition-colors">For Photographers</Link>
+            <Link to="/features" onClick={() => setIsMenuOpen(false)} className="block font-medium text-on-surface hover:text-primary transition-colors">Features</Link>
+            <Link to="/pricing" onClick={() => setIsMenuOpen(false)} className="block font-medium text-on-surface hover:text-primary transition-colors">Pricing</Link>
+            {!user && (
+              <div className="pt-4 border-t border-outline-variant/10 grid grid-cols-2 gap-4">
+                <Link 
+                  to="/signin" 
+                  onClick={() => setIsMenuOpen(false)}
+                  className="px-4 py-2 text-center font-medium text-on-surface border border-outline-variant/20 rounded-xl"
+                >
+                  Sign In
+                </Link>
+                <Link 
+                  to="/signup" 
+                  onClick={() => setIsMenuOpen(false)}
+                  className="px-4 py-2 text-center font-medium text-white signature-gradient rounded-xl"
+                >
+                  Sign Up
+                </Link>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </nav>
   );
 }

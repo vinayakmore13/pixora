@@ -72,6 +72,42 @@ def process_photo_task(photo_id: str, event_id: str, file_path: str):
                 "vector": embedding,
                 "face_count": len(results)
             }).execute()
+            
+            # Phase 3: Guest Matching (NEW)
+            # Find all guests registered for this event and check for matches
+            try:
+                registrations = supabase.table("guest_registrations").select("*").eq("event_id", event_id).execute()
+                for reg in registrations.data:
+                    if reg.get("selfie_embedding"):
+                        # Calculate similarity using pgvector (or manual fallback if needed)
+                        # For now, we perform a manual distance check or use an RPC if available
+                        # Since we are in the worker, we can just call the RPC match_embeddings but specifically for this guest
+                        # However, it's easier to just do it here or trigger another task
+                        
+                        # Let's use the match_embeddings RPC with the guest's embedding to see if it matches this photo
+                        rpc_res = supabase.rpc("match_embeddings", {
+                            "query_embedding": reg["selfie_embedding"],
+                            "match_threshold": 0.6,
+                            "match_count": 1,
+                            "target_event_id": event_id
+                        }).execute()
+                        
+                        # If the current photo_id is in the match list, this guest is in the photo
+                        matches = rpc_res.data or []
+                        if any(m["photo_id"] == photo_id for m in matches):
+                            logger.info(f"MATCH FOUND: Guest {reg['full_name']} found in photo {photo_id}")
+                            supabase.table("guest_matches").insert({
+                                "guest_id": reg["id"],
+                                "photo_id": photo_id,
+                                "event_id": event_id,
+                                "similarity": matches[0]["similarity"]
+                            }).execute()
+                            
+                            # Optional: Send Email/Notification trigger here
+                            # send_guest_notification.delay(reg["id"], photo_id)
+            except Exception as e:
+                logger.error(f"Error during guest matching for photo {photo_id}: {e}")
+
             face_count += 1
             
         # Step 4: Update status to 'ready'

@@ -16,6 +16,8 @@ import {
   Wifi,
   Sparkles,
   QrCode,
+  MessageCircle,
+  Users,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -56,8 +58,14 @@ export function EventManagement() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [activeTab, setActiveTab] = useState<
-    "overview" | "sync" | "selections" | "sharing"
+    "overview" | "sync" | "guests" | "selections" | "sharing"
   >("overview");
+  const [guestStats, setGuestStats] = useState({
+    registrations: 0,
+    matches: 0,
+    matchedPhotos: 0,
+    totalPhotos: 0
+  });
   const isPhotographer = profile?.user_type === "photographer";
 
   useEffect(() => {
@@ -66,10 +74,40 @@ export function EventManagement() {
     }
   }, [id, user, authLoading]);
 
+  async function fetchGuestStats() {
+    if (!id) return;
+    try {
+      const { count: regsCount } = await supabase
+        .from("guest_registrations")
+        .select("*", { count: "exact", head: true })
+        .eq("event_id", id);
+      
+      const { count: matchesCount } = await supabase
+        .from("guest_matches")
+        .select("*", { count: "exact", head: true })
+        .eq("event_id", id);
+
+      const { count: photoCount } = await supabase
+        .from("photos")
+        .select("*", { count: "exact", head: true })
+        .eq("event_id", id);
+
+      setGuestStats({
+        registrations: regsCount || 0,
+        matches: matchesCount || 0,
+        matchedPhotos: matchesCount || 0,
+        totalPhotos: photoCount || 0
+      });
+    } catch (err) {
+      console.error("Error fetching guest stats:", err);
+    }
+  }
+
   async function fetchEvent() {
     try {
       setLoading(true);
       setError(null);
+      fetchGuestStats();
 
       // Both the photographer and the client associated with the event can fetch it
       let query = supabase.from("events").select("*").eq("id", id);
@@ -388,6 +426,18 @@ export function EventManagement() {
             Client Selections
           </button>
           <button
+            onClick={() => setActiveTab("guests")}
+            className={cn(
+              "pb-4 font-bold text-sm border-b-2 transition-colors whitespace-nowrap flex items-center gap-2",
+              activeTab === "guests"
+                ? "border-primary text-primary"
+                : "border-transparent text-on-surface-variant hover:text-on-surface hover:border-outline-variant/30",
+            )}
+          >
+            <Sparkles size={16} />
+            Guest Delivery
+          </button>
+          <button
             onClick={() => setActiveTab("sharing")}
             className={cn(
               "pb-4 font-bold text-sm border-b-2 transition-colors whitespace-nowrap flex items-center gap-2",
@@ -396,9 +446,31 @@ export function EventManagement() {
                 : "border-transparent text-on-surface-variant hover:text-on-surface hover:border-outline-variant/30",
             )}
           >
-            <Sparkles size={16} />
-            AI Sharing
+            <Share2 size={16} />
+            AI Share Link
           </button>
+        </div>
+
+        {/* Event Quick Stats (Clean Summary Bar) */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            <div className="bg-white p-5 rounded-3xl silk-shadow border border-outline-variant/5">
+                <div className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">Registered Guests</div>
+                <div className="text-2xl font-bold text-on-surface">{guestStats.registrations}</div>
+            </div>
+            <div className="bg-white p-5 rounded-3xl silk-shadow border border-outline-variant/5">
+                <div className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">AI Matches Found</div>
+                <div className="text-2xl font-bold text-primary">{guestStats.matches}</div>
+            </div>
+            <div className="bg-white p-5 rounded-3xl silk-shadow border border-outline-variant/5">
+                <div className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">Photos Scanned</div>
+                <div className="text-2xl font-bold text-on-surface">{guestStats.totalPhotos}</div>
+            </div>
+            <div className="bg-white p-5 rounded-3xl silk-shadow border border-outline-variant/5">
+                <div className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">Engagement Rate</div>
+                <div className="text-2xl font-bold text-secondary">
+                    {guestStats.registrations > 0 ? Math.round((guestStats.matches / guestStats.registrations) * 100) : 0}%
+                </div>
+            </div>
         </div>
 
         {activeTab === "overview" ? (
@@ -585,6 +657,8 @@ export function EventManagement() {
           <div className="bg-white p-8 rounded-[2.5rem] silk-shadow border border-outline-variant/5">
             <CameraSyncManager eventId={event.id} />
           </div>
+        ) : activeTab === "guests" ? (
+          <GuestDeliveryManager eventId={event.id} />
         ) : activeTab === "selections" ? (
           <ClientSelections eventId={event.id} />
         ) : (
@@ -774,6 +848,142 @@ function SmartShareManager({ eventId }: { eventId: string }) {
             <p className="text-on-surface-variant text-sm font-medium">Link preview will appear here</p>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function GuestDeliveryManager({ eventId }: { eventId: string }) {
+  const [guests, setGuests] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchGuests();
+    // Realtime listener for new registrations
+    const channel = supabase
+      .channel('guest_updates')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'guest_registrations', filter: `event_id=eq.${eventId}` }, fetchGuests)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'guest_matches', filter: `event_id=eq.${eventId}` }, fetchGuests)
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [eventId]);
+
+  async function fetchGuests() {
+    try {
+      const { data, error } = await supabase
+        .from('guest_registrations')
+        .select('*, guest_matches(count)')
+        .eq('event_id', eventId)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      setGuests(data || []);
+    } catch (err) {
+      console.error('Error fetching guests:', err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const handleWhatsAppNotify = (guest: any) => {
+    const message = encodeURIComponent(
+      `Hi ${guest.full_name}, your photos from the event are ready! \n\nView them here: ${window.location.origin}/e/${eventId}\n\nPowered by Pixora AI.`
+    );
+    const phone = guest.phone ? guest.phone.replace(/\D/g, '') : '';
+    window.open(`https://wa.me/${phone}?text=${message}`, '_blank');
+  };
+
+  if (loading) return <div className="flex justify-center p-12"><Loader2 className="animate-spin text-primary" /></div>;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center bg-white p-6 rounded-[2rem] silk-shadow border border-outline-variant/5">
+        <div>
+            <h2 className="text-xl font-bold text-on-surface">Live Delivery Monitor</h2>
+            <p className="text-sm text-on-surface-variant">Real-time matching status for all registered guests</p>
+        </div>
+        <div className="flex gap-4">
+            <div className="text-center px-4 border-r border-outline-variant/10">
+                <div className="text-2xl font-bold text-primary">{guests.length}</div>
+                <div className="text-[10px] font-bold uppercase text-on-surface-variant">Guests</div>
+            </div>
+            <div className="text-center px-4">
+                <div className="text-2xl font-bold text-secondary">
+                    {guests.reduce((acc, g) => acc + (g.guest_matches?.[0]?.count || 0), 0)}
+                </div>
+                <div className="text-[10px] font-bold uppercase text-on-surface-variant">Matches</div>
+            </div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-[2.5rem] silk-shadow border border-outline-variant/5 overflow-hidden">
+        <table className="w-full text-left">
+          <thead>
+            <tr className="bg-surface-container-low border-b border-outline-variant/10">
+              <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-on-surface-variant">Guest</th>
+              <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-on-surface-variant">Status</th>
+              <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-on-surface-variant">Matches</th>
+              <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-on-surface-variant">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-outline-variant/10">
+            {guests.length > 0 ? guests.map((guest) => (
+              <tr key={guest.id} className="hover:bg-surface-container-low transition-colors">
+                <td className="px-6 py-5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold">
+                      {guest.full_name.charAt(0)}
+                    </div>
+                    <div>
+                      <div className="font-bold text-on-surface">{guest.full_name}</div>
+                      <div className="text-xs text-on-surface-variant">{guest.email || 'No email provided'}</div>
+                    </div>
+                  </div>
+                </td>
+                <td className="px-6 py-5">
+                  <span className={cn(
+                    "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest",
+                    guest.status === 'matched' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+                  )}>
+                    {guest.status}
+                  </span>
+                </td>
+                <td className="px-6 py-5">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-surface-container-high flex items-center justify-center text-sm font-bold">
+                        {guest.guest_matches?.[0]?.count || 0}
+                    </div>
+                    <span className="text-xs text-on-surface-variant">Photos Found</span>
+                  </div>
+                </td>
+                <td className="px-6 py-5">
+                  <div className="flex gap-2">
+                    <button 
+                        onClick={() => handleWhatsAppNotify(guest)}
+                        title="Notify via WhatsApp"
+                        disabled={!guest.phone}
+                        className="p-2 rounded-xl bg-green-50 text-green-600 hover:bg-green-600 hover:text-white transition-all disabled:opacity-30 disabled:hover:bg-green-50 disabled:hover:text-green-600"
+                    >
+                        <MessageCircle size={18} />
+                    </button>
+                    <button className="p-2 rounded-xl bg-primary/5 text-primary hover:bg-primary hover:text-white transition-all">
+                        <Users size={18} />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            )) : (
+              <tr>
+                <td colSpan={4} className="px-6 py-12 text-center text-on-surface-variant">
+                    <Users size={48} className="mx-auto mb-4 opacity-10" />
+                    <p className="font-medium">No guests registered yet</p>
+                    <p className="text-xs">Guests will appear here once they scan the QR code.</p>
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );

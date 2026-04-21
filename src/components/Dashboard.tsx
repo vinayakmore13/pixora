@@ -7,6 +7,7 @@ import { supabase } from '../lib/supabaseClient';
 import { cn } from '../lib/utils';
 import { LoadingSpinner } from './LoadingSpinner';
 import { SelfieCapture } from './SelfieCapture';
+import { useLayout } from '../contexts/LayoutContext';
 
 // Interface matches actual database schema (002_create_events.sql)
 interface Event {
@@ -32,6 +33,7 @@ interface Event {
 
 export function Dashboard() {
   const { user, profile, loading: authLoading } = useAuth();
+  const { isSidebarOpen, setIsSidebarOpen, isDesktopCollapsed } = useLayout();
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -128,9 +130,21 @@ export function Dashboard() {
   }
 
   return (
-    <div className="flex min-h-screen bg-surface pt-20">
+    <div className="flex min-h-screen bg-surface pt-20 overflow-x-hidden">
+      {/* Backdrop for mobile */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/20 backdrop-blur-sm z-30 lg:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
-      <aside className="w-64 fixed left-0 top-20 bottom-0 bg-white border-r border-outline-variant/10 p-4 hidden lg:block">
+      <aside className={cn(
+        "w-64 fixed left-0 top-20 bottom-0 bg-white border-r border-outline-variant/10 p-4 z-40 transition-all duration-300 ease-in-out",
+        isSidebarOpen ? "translate-x-0" : "-translate-x-full",
+        isDesktopCollapsed ? "lg:-translate-x-full" : "lg:translate-x-0"
+      )}>
         <nav className="space-y-2">
           <SidebarLink icon={<LayoutGrid size={20} />} label="Dashboard" to="/dashboard" active={location.pathname === '/dashboard'} />
           <SidebarLink icon={<MessageCircle size={20} />} label="Messages" to="/messages" active={location.pathname.startsWith('/messages')} />
@@ -142,10 +156,13 @@ export function Dashboard() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 lg:ml-64 p-8">
-        <header className="flex justify-between items-end mb-12">
+      <main className={cn(
+        "flex-1 p-4 md:p-8 transition-all duration-300",
+        isDesktopCollapsed ? "lg:ml-0" : "lg:ml-64"
+      )}>
+        <header className="flex flex-col sm:flex-row justify-between sm:items-end mb-12 gap-6">
           <div>
-            <h1 className="text-4xl font-serif font-bold text-on-surface mb-2">
+            <h1 className="text-3xl md:text-4xl font-serif font-bold text-on-surface mb-2">
               Welcome back, {profile?.full_name?.split(' ')[0] || 'User'}
             </h1>
             <p className="text-on-surface-variant">
@@ -155,7 +172,7 @@ export function Dashboard() {
           {profile?.user_type === 'photographer' ? (
             <Link
               to="/create-event"
-              className="signature-gradient text-white px-6 py-3 rounded-full font-bold flex items-center gap-2 shadow-lg shadow-primary/20 active:scale-95 transition-all"
+              className="signature-gradient text-white px-6 py-3 rounded-full font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary/20 active:scale-95 transition-all w-full sm:w-auto"
             >
               <Plus size={20} />
               Create New Shoot
@@ -163,7 +180,7 @@ export function Dashboard() {
           ) : (
             <Link
               to="/messages"
-              className="bg-on-surface text-white px-6 py-3 rounded-full font-bold flex items-center gap-2 active:scale-95 transition-all hover:bg-on-surface/90"
+              className="bg-on-surface text-white px-6 py-3 rounded-full font-bold flex items-center justify-center gap-2 active:scale-95 transition-all hover:bg-on-surface/90 w-full sm:w-auto"
             >
               <MessageCircle size={20} />
               Messages
@@ -196,24 +213,24 @@ export function Dashboard() {
 
         {/* My Events */}
         <section>
-          <div className="flex justify-between items-center mb-6">
+          <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-6 gap-4">
             <h2 className="text-2xl font-serif font-bold text-on-surface">My Events</h2>
-          <div className="flex items-center gap-4">
-              <div className="relative">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
+              <div className="relative flex-grow sm:flex-grow-0">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant" size={16} />
                 <input
                   type="text"
                   placeholder="Search events..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="bg-white border border-outline-variant/20 rounded-full py-2 pl-10 pr-4 text-sm focus:ring-1 focus:ring-primary outline-none"
+                  className="bg-white border border-outline-variant/20 rounded-full py-2 pl-10 pr-4 text-sm focus:ring-1 focus:ring-primary outline-none w-full sm:w-64"
                 />
               </div>
               {/* Status Filter */}
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
-                className="bg-white border border-outline-variant/20 rounded-full py-2 px-4 text-sm focus:ring-1 focus:ring-primary outline-none text-on-surface-variant"
+                className="bg-white border border-outline-variant/20 rounded-full py-2 px-4 text-sm focus:ring-1 focus:ring-primary outline-none text-on-surface-variant w-full sm:w-auto"
               >
                 <option value="all">All Status</option>
                 <option value="upcoming">Upcoming</option>
