@@ -1,17 +1,12 @@
-import { AlertCircle, ArrowRight, ChevronRight, Compass, Filter, Heart, MapPin, Star, TrendingUp, Zap } from 'lucide-react';
+import { AlertCircle, ArrowRight, ChevronRight, Filter, Heart, MapPin, Star } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabaseClient';
 import { cn } from '../lib/utils';
-import { MarketplaceAnalytics } from './MarketplaceAnalytics';
-import { SmartMatching } from './SmartMatching';
-
-type MarketplaceTab = 'browse' | 'matching' | 'analytics';
 
 export function Marketplace() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<MarketplaceTab>('browse');
   const [photographers, setPhotographers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -126,64 +121,7 @@ export function Marketplace() {
 
   return (
     <div className="pt-20 pb-20 bg-surface min-h-screen">
-      {/* Tab Navigation */}
-      <div className="sticky top-20 bg-white border-b border-gray-200 z-40">
-        <div className="max-w-7xl mx-auto px-8">
-          <div className="flex gap-8">
-            <button
-              onClick={() => setActiveTab('browse')}
-              className={cn(
-                'py-4 px-2 font-semibold transition-all border-b-2 flex items-center gap-2',
-                activeTab === 'browse'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-600 hover:text-gray-900'
-              )}
-            >
-              <Compass size={20} />
-              Browse
-            </button>
-            <button
-              onClick={() => setActiveTab('matching')}
-              className={cn(
-                'py-4 px-2 font-semibold transition-all border-b-2 flex items-center gap-2',
-                activeTab === 'matching'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-600 hover:text-gray-900'
-              )}
-              disabled={!user}
-              title={!user ? 'Sign in to use AI matching' : ''}
-            >
-              <Zap size={20} />
-              AI Match
-            </button>
-            <button
-              onClick={() => setActiveTab('analytics')}
-              className={cn(
-                'py-4 px-2 font-semibold transition-all border-b-2 flex items-center gap-2',
-                activeTab === 'analytics'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-600 hover:text-gray-900'
-              )}
-            >
-              <TrendingUp size={20} />
-              Insights
-            </button>
-          </div>
-        </div>
-      </div>
 
-      {/* Content Based on Active Tab */}
-      {activeTab === 'matching' && !user && (
-        <div className="max-w-4xl mx-auto px-8 py-16 text-center">
-          <p className="text-lg text-gray-600 mb-6">Sign in to use our AI-powered photographer matching system</p>
-          <Link to="/signin" className="inline-block px-8 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700">
-            Sign In
-          </Link>
-        </div>
-      )}
-
-      {activeTab === 'browse' && (
-        <>
       {/* Hero Section */}
       <section className="px-8 mb-16 mt-8">
         <div className="max-w-7xl mx-auto bg-on-surface rounded-[3rem] p-12 md:p-20 text-white relative overflow-hidden">
@@ -390,20 +328,6 @@ export function Marketplace() {
           )}
         </main>
       </div>
-        </>
-      )}
-
-      {activeTab === 'matching' && user && (
-        <div className="max-w-7xl mx-auto px-8 py-12">
-          <SmartMatching clientId={user.id} />
-        </div>
-      )}
-
-      {activeTab === 'analytics' && (
-        <div className="max-w-7xl mx-auto px-8 py-12">
-          <MarketplaceAnalytics />
-        </div>
-      )}
     </div>
   );
 }

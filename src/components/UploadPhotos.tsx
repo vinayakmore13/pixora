@@ -50,7 +50,8 @@ export function UploadPhotos() {
   // Initialize upload manager when event is selected
   React.useEffect(() => {
     if (selectedEventId && user) {
-      const manager = new UploadManager(selectedEventId, {
+      const manager = new UploadManager({
+        eventId: selectedEventId,
         maxConcurrent: 3,
         uploaderId: user.id,
         isGuestUpload: false,

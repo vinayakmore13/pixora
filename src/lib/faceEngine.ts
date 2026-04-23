@@ -14,10 +14,10 @@ export const faceEngine = {
    * Called by UploadManager. 
    * Dual Processing: ALWAYS stores local vector. If Azure is enabled, also uploads to Azure.
    */
-  async extractAndStoreFaces(imgElement: HTMLImageElement, photoId: string, eventId: string): Promise<void> {
+  async extractAndStoreFaces(imgElement: HTMLImageElement, photoId: string, eventId: string, isFastSelection: boolean = false): Promise<void> {
     // 1. ALWAYS run local for the pgvector fallback continuity
     try {
-      await localProvider.extractAndStore(imgElement, photoId);
+      await localProvider.extractAndStore(imgElement, photoId, isFastSelection);
     } catch (e) {
       console.error("Local PGVector storing failed:", e);
     }

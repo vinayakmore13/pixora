@@ -41,7 +41,7 @@ export function PublicEventPage() {
     const [event, setEvent] = useState<Event | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [viewMode, setViewMode] = useState<ViewMode>('landing');
+    const [viewMode, setViewMode] = useState<ViewMode>('register');
     
     // Upload state
     const [password, setPassword] = useState('');
@@ -102,11 +102,23 @@ export function PublicEventPage() {
         try {
             const { data, error: fetchError } = await supabase
                 .from('guest_matches')
-                .select('*, photos(url, thumbnail_url)')
+                .select('*, photos(id, file_path, thumbnail_url)')
                 .eq('guest_id', registrationId);
             
             if (fetchError) throw fetchError;
-            setMatches(data || []);
+            
+            const formattedMatches = (data || []).map(match => {
+                const { data: urlData } = supabase.storage.from('photos').getPublicUrl(match.photos.file_path);
+                return {
+                    ...match,
+                    photos: {
+                        ...match.photos,
+                        url: urlData.publicUrl
+                    }
+                };
+            });
+            
+            setMatches(formattedMatches);
         } catch (err) {
             console.error('Error fetching matches:', err);
         }
@@ -394,7 +406,8 @@ export function PublicEventPage() {
                 {viewMode === 'selfie' && (
                     <SelfieCapture 
                         onCaptureComplete={handleSelfieComplete} 
-                        onClose={() => setViewMode('register')} 
+                        onClose={() => setViewMode('register')}
+                        requireAuth={false}
                     />
                 )}
 

@@ -1,12 +1,13 @@
-import { CheckCircle2, CopyPlus, Heart, Info, Loader2, X } from 'lucide-react';
+import { CheckCircle2, CopyPlus, Heart, Info, Loader2, X, Search, Sparkles, Lock, CreditCard, Mail, Phone, ShieldCheck } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { getRealtimeSelectionService, GuestActivity } from '../lib/realtimeSelection';
 import { getSelectionAIService, PhotoScore } from '../lib/selectionAI';
 import { supabase } from '../lib/supabaseClient';
 import { cn } from '../lib/utils';
 import { GuestActivityFeed, GuestPresence } from './GuestActivityFeed';
 import { SelectionAssistant, SelectionSuggestions } from './SelectionSuggestions';
+import { faceEngine } from '../lib/faceEngine';
 
 interface Photo {
   id: string;
@@ -39,6 +40,7 @@ interface GuestStatus {
 
 export function SelectionPortal() {
   const { code } = useParams();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   
@@ -65,6 +67,19 @@ export function SelectionPortal() {
   const [isCompareMode, setIsCompareMode] = useState(false);
   const [comparePhotos, setComparePhotos] = useState<string[]>([]);
   const [showCompareModal, setShowCompareModal] = useState(false);
+
+  // Fast Selection additions
+  const [isFastSelection, setIsFastSelection] = useState(false);
+  const [isVerified, setIsVerified] = useState(false);
+  const [showVerification, setShowVerification] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
+  const [enteredOtp, setEnteredOtp] = useState('');
+  
+  const [isAiSearching, setIsAiSearching] = useState(false);
+  const [aiLimit, setAiLimit] = useState(1);
+  const [aiResults, setAiResults] = useState<string[]>([]); // Ranked IDs
+  const [showPaywall, setShowPaywall] = useState(false);
+  const [matchedPhotoIds, setMatchedPhotoIds] = useState<Set<string>>(new Set());
 
   // AI Suggestions State
   const [suggestions, setSuggestions] = useState<PhotoScore[]>([]);
@@ -160,35 +175,92 @@ export function SelectionPortal() {
   const loadSelectionData = async () => {
     try {
       setLoading(true);
-      // 1. Get selection config
+      // 1. Get selection config (Try event-based first)
       const { data: selData, error: selError } = await supabase
         .from('photo_selections')
         .select('*')
         .eq('selection_code', code)
-        .single();
+        .maybeSingle();
         
-      if (selError) throw selError;
-      setSelection(selData);
+      if (selData) {
+        setIsFastSelection(false);
+        setSelection(selData);
 
-      // 2. Get photos (edited only)
-      const { data: photoData, error: photoError } = await supabase
-        .from('photos')
-        .select('*')
-        .eq('event_id', selData.event_id)
-        .eq('is_edited', true)
-        .order('created_at', { ascending: true });
-        
-      if (photoError) throw photoError;
-      setPhotos(photoData || []);
+        // Get photos
+        const { data: photoData } = await supabase
+          .from('photos')
+          .select('*')
+          .eq('event_id', selData.event_id)
+          .eq('is_edited', true)
+          .order('created_at', { ascending: true });
+          
+        setPhotos(photoData || []);
+        loadFavorites(selData.id);
+      } else {
+        // Try fast selection
+        const { data: fastData, error: fastError } = await supabase
+          .from('fast_selection_sessions')
+          .select('*')
+          .eq('selection_code', code)
+          .maybeSingle();
 
-      // 3. Get existing favorites
-      loadFavorites(selData.id);
+        if (fastError || !fastData) {
+          throw new Error('Selection portal not found');
+        }
+
+        setIsFastSelection(true);
+        setSelection(fastData);
+
+        // Get photos for fast selection
+        const { data: fastPhotos } = await supabase
+          .from('fast_selection_photos')
+          .select('*')
+          .eq('session_id', fastData.id)
+          .order('created_at', { ascending: true });
+
+        // Map to common photo interface
+        setPhotos(fastPhotos?.map(p => ({
+          id: p.id,
+          file_path: p.file_path,
+          thumbnail_url: p.thumbnail_url,
+          width: 0,
+          height: 0
+        })) || []);
+
+        // Load client status for fast selection
+        if (guestEmail) {
+          const { data: client } = await supabase
+            .from('fast_selection_clients')
+            .select('*')
+            .eq('session_id', fastData.id)
+            .eq('email', guestEmail.trim())
+            .maybeSingle();
+          
+          if (client) {
+            setGuestId(client.id);
+            setIsVerified(client.is_verified);
+            setAiLimit(client.ai_unlocked_limit);
+            loadFastFavorites(client.id);
+          }
+        }
+      }
 
     } catch (err) {
       console.error(err);
       setError('Invalid selection code or portal not found.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadFastFavorites = async (clientId: string) => {
+    const { data } = await supabase
+      .from('fast_selection_favorites')
+      .select('photo_id')
+      .eq('client_id', clientId);
+      
+    if (data) {
+      setFavorites(data.map(f => ({ photo_id: f.photo_id, guest_id: clientId })));
     }
   };
 
@@ -206,16 +278,20 @@ export function SelectionPortal() {
   const loadGuestStatus = async (selectionId: string) => {
     try {
       const { data: guests, error } = await supabase
-        .from('photo_selection_guests')
-        .select('id, name, status, last_activity')
-        .eq('selection_id', selectionId);
+        .from(isFastSelection ? 'fast_selection_clients' : 'photo_selection_guests')
+        .select('*')
+        .eq(isFastSelection ? 'session_id' : 'selection_id', selectionId);
       
       if (error) throw error;
       if (guests) {
         const guestStats = guests.map(guest => {
-          const guestSelectionCount = favorites.filter(f => f.guest_id === guest.id).length;
+          const guestId = guest.id;
+          const guestSelectionCount = favorites.filter(f => f.guest_id === guestId).length;
           return {
-            ...guest,
+            id: guest.id,
+            name: guest.name || guest.email,
+            status: guest.status || 'accepted',
+            last_activity: guest.last_activity,
             selected_count: guestSelectionCount
           };
         });
@@ -256,90 +332,167 @@ export function SelectionPortal() {
     return () => clearTimeout(timer);
   }, [selection, guestId, favorites, photos]);
 
+  const handleAIFaceSearch = async (imageFile: File) => {
+    setIsAiSearching(true);
+    try {
+      // 1. Get embeddings for search image
+      const searchResult = await faceEngine.findMyPhotos(imageFile, photos.map(p => ({
+        id: p.id,
+        file_path: p.file_path
+      })));
+      
+      const rankedIds = searchResult.map(r => r.id);
+      setAiResults(rankedIds);
+      setMatchedPhotoIds(new Set(rankedIds));
+      
+      // If found more than limit, show paywall
+      if (rankedIds.length > aiLimit) {
+        setShowPaywall(true);
+      }
+      
+      // Scroll to first result
+      if (rankedIds.length > 0) {
+        handleSuggestedPhotoClick(rankedIds[0]);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('AI Search failed. Please try again.');
+    } finally {
+      setIsAiSearching(false);
+    }
+  };
+
+  const handleVerificationSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    // Simulate OTP verification
+    if (enteredOtp === '123456') {
+      try {
+        await supabase
+          .from('fast_selection_clients')
+          .update({ is_verified: true })
+          .eq('id', guestId);
+        setIsVerified(true);
+        setShowVerification(false);
+      } catch (err) {
+        console.error(err);
+      }
+    } else {
+      alert('Invalid OTP. Try 123456 for demo.');
+    }
+  };
+
   const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selection || !guestName.trim()) return;
+    if (!selection || !guestName.trim() || !guestEmail.trim()) return;
     
     try {
       setSubmitting(true);
-      // Check if guest exists
-      const { data: existing } = await supabase
-        .from('photo_selection_guests')
-        .select('*')
-        .eq('selection_id', selection.id)
-        .eq('name', guestName.trim())
-        .maybeSingle();
-        
-      let guest_id;
-      if (existing) {
-        guest_id = existing.id;
-      } else {
-        const { data: newGuest, error: guestErr } = await supabase
-          .from('photo_selection_guests')
-          .insert({
-            selection_id: selection.id,
+      if (isFastSelection) {
+        // Create or get client
+        const { data: client, error: clientErr } = await supabase
+          .from('fast_selection_clients')
+          .upsert({
+            session_id: selection.id,
             name: guestName.trim(),
-            email: guestEmail.trim()
-          })
+            email: guestEmail.trim(),
+            phone: '', // Optional
+          }, { onConflict: 'session_id,email' })
           .select()
           .single();
+
+        if (clientErr) throw clientErr;
+        setGuestId(client.id);
+        setAiLimit(client.ai_unlocked_limit);
+        setIsVerified(client.is_verified);
+        
+        sessionStorage.setItem(`guest_id_${code}`, client.id);
+        sessionStorage.setItem(`guest_email_${code}`, client.email);
+        
+        if (!client.is_verified) {
+          setOtpSent(true);
+          setShowVerification(true);
+        }
+      } else {
+        // Legacy event join
+        const { data: existing } = await supabase
+          .from('photo_selection_guests')
+          .select('*')
+          .eq('selection_id', selection.id)
+          .eq('name', guestName.trim())
+          .maybeSingle();
           
-        if (guestErr) throw guestErr;
-        guest_id = newGuest.id;
+        let guest_id;
+        if (existing) {
+          guest_id = existing.id;
+        } else {
+          const { data: newGuest, error: guestErr } = await supabase
+            .from('photo_selection_guests')
+            .insert({
+              selection_id: selection.id,
+              name: guestName.trim(),
+              email: guestEmail.trim()
+            })
+            .select()
+            .single();
+            
+          if (guestErr) throw guestErr;
+          guest_id = newGuest.id;
+        }
+        
+        setGuestId(guest_id);
+        sessionStorage.setItem(`guest_id_${code}`, guest_id);
+        sessionStorage.setItem(`guest_name_${code}`, guestName.trim());
       }
-      
-      setGuestId(guest_id);
-      setGuestName(guestName.trim());
-      setGuestEmail(guestEmail.trim());
-      sessionStorage.setItem(`guest_id_${code}`, guest_id);
-      sessionStorage.setItem(`guest_name_${code}`, guestName.trim());
-      sessionStorage.setItem(`guest_email_${code}`, guestEmail.trim());
     } catch (err) {
       console.error('Join error', err);
-      alert('Failed to join. Please try again.');
+      alert('Failed to join.');
     } finally {
       setSubmitting(false);
     }
   };
 
   const toggleFavorite = async (photoId: string) => {
-    if (!selection || !guestId || selection.status !== 'pending') return;
+    if (!selection || (isFastSelection && !guestId) || (!isFastSelection && !guestId)) return;
+    if (selection.status !== 'pending' && !isFastSelection) return;
 
     const isFav = favorites.some(f => f.photo_id === photoId && f.guest_id === guestId);
     
-    // Check if adding would exceed limit
+    // Check limit
     const uniqueFavs = new Set(favorites.map(f => f.photo_id));
-    if (!isFav && uniqueFavs.size >= selection.max_photos && !uniqueFavs.has(photoId)) {
-      alert(`You've already selected the maximum of ${selection.max_photos} photos.`);
+    if (!isFav && uniqueFavs.size >= (selection.max_photos || 50) && !uniqueFavs.has(photoId)) {
+      alert(`Maximum limit reached.`);
       return;
     }
 
     try {
-      // Optimistic update
-      if (isFav) {
-        setFavorites(prev => prev.filter(f => !(f.photo_id === photoId && f.guest_id === guestId)));
-        await supabase
-          .from('photo_favorites')
-          .delete()
-          .match({ selection_id: selection.id, photo_id: photoId, guest_id: guestId });
+      if (isFastSelection) {
+        if (isFav) {
+          setFavorites(prev => prev.filter(f => f.photo_id !== photoId));
+          await supabase.from('fast_selection_favorites').delete().match({ client_id: guestId, photo_id: photoId });
+        } else {
+          setFavorites(prev => [...prev, { photo_id: photoId, guest_id: guestId! }]);
+          await supabase.from('fast_selection_favorites').insert({ client_id: guestId, photo_id: photoId });
+        }
       } else {
-        setFavorites(prev => [...prev, { photo_id: photoId, guest_id: guestId }]);
-        await supabase
-          .from('photo_favorites')
-          .insert({ selection_id: selection.id, photo_id: photoId, guest_id: guestId });
+        if (isFav) {
+          setFavorites(prev => prev.filter(f => !(f.photo_id === photoId && f.guest_id === guestId)));
+          await supabase.from('photo_favorites').delete().match({ selection_id: selection.id, photo_id: photoId, guest_id: guestId });
+        } else {
+          setFavorites(prev => [...prev, { photo_id: photoId, guest_id: guestId! }]);
+          await supabase.from('photo_favorites').insert({ selection_id: selection.id, photo_id: photoId, guest_id: guestId });
+        }
       }
       
-      // Broadcast selection to other guests in real-time
-      if (realtimeRef.current) {
+      if (!isFastSelection && realtimeRef.current) {
         realtimeRef.current.broadcastSelection(photoId, guestName);
       }
       
-      // Reload favorites to sync with partner's potentials
-      loadFavorites(selection.id);
-      loadGuestStatus(selection.id);
+      if (!isFastSelection) {
+        loadFavorites(selection.id);
+        loadGuestStatus(selection.id);
+      }
     } catch (err) {
       console.error(err);
-      loadFavorites(selection.id); // Revert on err
     }
   };
 
@@ -361,20 +514,46 @@ export function SelectionPortal() {
     if (!selection) return;
     const uniqueFavs = new Set(favorites.map(f => f.photo_id));
     
-    if (uniqueFavs.size !== selection.max_photos) {
-      alert(`Please select exactly ${selection.max_photos} photos before submitting.`);
+    // If max_photos is 0, it means unlimited
+    if (selection.max_photos > 0 && uniqueFavs.size > selection.max_photos) {
+      alert(`You have selected too many photos. Please remove ${uniqueFavs.size - selection.max_photos} photos to stay within the limit of ${selection.max_photos}.`);
+      return;
+    }
+    
+    if (uniqueFavs.size === 0) {
+      alert("Please select at least one photo before submitting.");
       return;
     }
     
     if (confirm('Are you sure you want to finalize and submit these selections to the photographer? This cannot be undone.')) {
       try {
         setSubmitting(true);
-        const { error } = await supabase
-          .from('photo_selections')
-          .update({ status: 'submitted' })
-          .eq('id', selection.id);
+        
+        if (isFastSelection) {
+          // Update client status
+          const { error: clientError } = await supabase
+            .from('fast_selection_clients')
+            .update({ status: 'submitted' })
+            .eq('id', guestId);
           
-        if (error) throw error;
+          if (clientError) throw clientError;
+
+          // Update overall session status
+          const { error: sessionError } = await supabase
+            .from('fast_selection_sessions')
+            .update({ status: 'submitted' })
+            .eq('id', selection.id);
+
+          if (sessionError) throw sessionError;
+        } else {
+          const { error } = await supabase
+            .from('photo_selections')
+            .update({ status: 'submitted' })
+            .eq('id', selection.id);
+            
+          if (error) throw error;
+        }
+          
         setSelection({ ...selection, status: 'submitted' });
       } catch (err) {
         console.error(err);
@@ -408,48 +587,89 @@ export function SelectionPortal() {
 
   // Calculate unique photos selected
   const uniqueSelectedIds = Array.from(new Set(favorites.map(f => f.photo_id)));
-  const progressPercent = Math.min(100, (uniqueSelectedIds.length / selection.max_photos) * 100);
+  const maxPhotosCount = Number(selection.max_photos) || 0;
+  const progressPercent = maxPhotosCount > 0 
+    ? Math.min(100, (uniqueSelectedIds.length / maxPhotosCount) * 100)
+    : (uniqueSelectedIds.length > 0 ? 100 : 0);
 
-  if (!guestId) {
+  if (!guestId || (isFastSelection && !isVerified)) {
     return (
       <div className="min-h-screen bg-surface flex items-center justify-center p-8">
-        <div className="bg-white p-8 md:p-12 rounded-[2.5rem] silk-shadow border border-outline-variant/5 max-w-md w-full text-center">
-          <h1 className="text-3xl font-serif font-bold text-on-surface mb-2">Photo Selection</h1>
-          <p className="text-on-surface-variant mb-8">Please enter your name to begin selecting photos for the album.</p>
+        <div className="bg-white p-8 md:p-12 rounded-[2.5rem] silk-shadow border border-outline-variant/5 max-w-md w-full">
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-serif font-bold text-on-surface mb-2">Photo Selection</h1>
+            <p className="text-on-surface-variant">
+              {otpSent ? 'Verify your email to access the gallery.' : 'Please enter your details to begin.'}
+            </p>
+          </div>
           
-          <form onSubmit={handleJoin} className="space-y-4 text-left">
-            <div className="space-y-2">
-              <label className="text-sm font-bold text-on-surface ml-1">Your Name</label>
-              <input
-                type="text"
-                required
-                autoComplete="name"
-                value={guestName}
-                onChange={(e) => setGuestName(e.target.value)}
-                placeholder="e.g., Priya"
-                className="w-full bg-surface-container-low border border-transparent rounded-xl px-4 py-3.5 text-base focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white transition-all"
-              />
-            </div>
-            <div className="space-y-2 mb-6">
-              <label className="text-sm font-bold text-on-surface ml-1">Email <span className="text-on-surface-variant font-normal">(optional)</span></label>
-              <input
-                type="email"
-                autoComplete="email"
-                value={guestEmail}
-                onChange={(e) => setGuestEmail(e.target.value)}
-                placeholder="For updates"
-                className="w-full bg-surface-container-low border border-transparent rounded-xl px-4 py-3.5 text-base focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white transition-all"
-              />
-            </div>
-            
-            <button
-              type="submit"
-              disabled={submitting || !guestName.trim()}
-              className="w-full signature-gradient text-white py-3.5 flex items-center justify-center gap-2 rounded-full font-bold shadow-lg shadow-primary/20 active:scale-95 transition-all disabled:opacity-50 text-base touch-target"
-            >
-              {submitting ? <Loader2 size={20} className="animate-spin" /> : 'Enter Portal'}
-            </button>
-          </form>
+          {!otpSent ? (
+            <form onSubmit={handleJoin} className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant ml-1">Your Name</label>
+                <input
+                  type="text" required
+                  value={guestName}
+                  onChange={(e) => setGuestName(e.target.value)}
+                  placeholder="e.g., Priya"
+                  className="w-full bg-surface-container-low border-none rounded-2xl p-4 text-base focus:ring-2 focus:ring-primary outline-none"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant ml-1">Email</label>
+                <input
+                  type="email" required
+                  value={guestEmail}
+                  onChange={(e) => setGuestEmail(e.target.value)}
+                  placeholder="name@email.com"
+                  className="w-full bg-surface-container-low border-none rounded-2xl p-4 text-base focus:ring-2 focus:ring-primary outline-none"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={submitting}
+                className="w-full signature-gradient text-white py-4 rounded-full font-bold shadow-lg shadow-primary/20 transition-all flex items-center justify-center gap-2"
+              >
+                {submitting ? <Loader2 size={20} className="animate-spin" /> : 'Enter Portal'}
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleVerificationSubmit} className="space-y-6">
+              <div className="space-y-4">
+                <div className="bg-primary/5 p-4 rounded-2xl border border-primary/10">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-primary mb-1">Demo Mode Notice</p>
+                  <p className="text-xs text-on-surface-variant">Since this is a demo, please use the code <strong>123456</strong> to proceed.</p>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant ml-1 text-center block">Enter verification code</label>
+                  <input
+                    type="text" required maxLength={6}
+                    value={enteredOtp}
+                    onChange={(e) => setEnteredOtp(e.target.value)}
+                    placeholder="123456"
+                    className="w-full bg-surface-container-low border-none rounded-2xl p-4 text-center text-2xl tracking-[0.5em] font-bold focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <button
+                  type="submit"
+                  className="w-full signature-gradient text-white py-4 rounded-full font-bold shadow-lg shadow-primary/20 transition-all flex items-center justify-center gap-2 active:scale-95"
+                >
+                  <ShieldCheck size={20} /> Verify & Access
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => alert('Demo Mode: Your code is 123456')}
+                  className="w-full text-[10px] font-bold uppercase tracking-widest text-on-surface-variant hover:text-primary transition-colors py-2"
+                >
+                  Didn't receive code? Resend
+                </button>
+              </div>
+            </form>
+          )}
         </div>
       </div>
     );
@@ -465,7 +685,7 @@ export function SelectionPortal() {
           <div className="flex-1 sm:flex-none">
             <h1 className="text-lg sm:text-2xl font-serif font-bold text-on-surface">Photo Selection</h1>
             <p className="text-xs font-bold uppercase tracking-widest text-primary leading-none">
-              {isSubmitted ? 'Finalized' : `${uniqueSelectedIds.length} / ${selection.max_photos}`}
+              {isSubmitted ? 'Finalized' : `${uniqueSelectedIds.length} / ${maxPhotosCount === 0 ? '∞' : maxPhotosCount}`}
             </p>
           </div>
           
@@ -490,6 +710,28 @@ export function SelectionPortal() {
           
           {!isSubmitted && (
             <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 w-full sm:w-auto">
+              {/* AI Search Button */}
+              <div className="relative">
+                <input
+                  type="file"
+                  id="ai-search-input"
+                  className="hidden"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleAIFaceSearch(file);
+                  }}
+                />
+                <button
+                  onClick={() => document.getElementById('ai-search-input')?.click()}
+                  disabled={isAiSearching}
+                  className="px-4 py-2.5 rounded-full font-bold text-sm bg-primary/10 text-primary border border-primary/20 flex items-center gap-2 hover:bg-primary/20 transition-all touch-target"
+                >
+                  {isAiSearching ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                  Find My Photos
+                </button>
+              </div>
+
               <button
                 onClick={() => {
                   setIsCompareMode(!isCompareMode);
@@ -510,9 +752,9 @@ export function SelectionPortal() {
                   <div 
                     className={cn(
                       "h-full transition-all duration-500 rounded-full",
-                      uniqueSelectedIds.length === selection.max_photos ? "bg-green-500" : "bg-primary"
+                      uniqueSelectedIds.length > 0 && (maxPhotosCount === 0 || uniqueSelectedIds.length <= maxPhotosCount) ? "bg-green-500" : "bg-primary"
                     )}
-                    style={{ width: `${progressPercent}%` }}
+                    style={{ width: maxPhotosCount > 0 ? `${progressPercent}%` : (uniqueSelectedIds.length > 0 ? '100%' : '0%') }}
                   ></div>
                 </div>
               </div>
@@ -524,23 +766,34 @@ export function SelectionPortal() {
               >
                 👥 Guests ({allGuests.length})
               </button>
-              <button
-                onClick={handleSubmitSelections}
-                disabled={uniqueSelectedIds.length !== selection.max_photos || submitting}
-                className={cn(
-                  "px-4 sm:px-6 py-2 sm:py-2.5 rounded-full font-bold text-xs sm:text-sm transition-all whitespace-nowrap touch-target",
-                  uniqueSelectedIds.length === selection.max_photos 
-                    ? "signature-gradient text-white shadow-lg shadow-primary/20 active:scale-95" 
-                    : "bg-surface-container-low text-on-surface-variant cursor-not-allowed"
+              <div className="flex flex-col items-center sm:items-end gap-1">
+                <button
+                  onClick={handleSubmitSelections}
+                  disabled={(maxPhotosCount > 0 && uniqueSelectedIds.length > maxPhotosCount) || uniqueSelectedIds.length === 0 || submitting}
+                  className={cn(
+                    "px-4 sm:px-6 py-2 sm:py-2.5 rounded-full font-bold text-xs sm:text-sm transition-all whitespace-nowrap touch-target w-full sm:w-auto",
+                    (uniqueSelectedIds.length > 0 && (maxPhotosCount === 0 || uniqueSelectedIds.length <= maxPhotosCount))
+                      ? "signature-gradient text-white shadow-lg shadow-primary/20 active:scale-95" 
+                      : "bg-surface-container-low text-on-surface-variant cursor-not-allowed"
+                  )}
+                >
+                  {submitting ? <Loader2 size={16} className="animate-spin" /> : (
+                    <>
+                      <span className="hidden sm:inline">Submit Selections</span>
+                      <span className="sm:hidden">Submit</span>
+                    </>
+                  )}
+                </button>
+                {!isSubmitted && !submitting && (
+                  <p className="text-[10px] font-bold uppercase tracking-tight text-on-surface-variant/60 mr-2">
+                    {maxPhotosCount > 0 && uniqueSelectedIds.length > maxPhotosCount
+                      ? `Remove ${uniqueSelectedIds.length - maxPhotosCount} to submit`
+                      : uniqueSelectedIds.length === 0 
+                        ? "Select photos first"
+                        : "Ready to submit"}
+                  </p>
                 )}
-              >
-                {submitting ? <Loader2 size={16} className="animate-spin" /> : (
-                  <>
-                    <span className="hidden sm:inline">Submit Selections</span>
-                    <span className="sm:hidden">Submit</span>
-                  </>
-                )}
-              </button>
+              </div>
             </div>
           )}
         </div>
@@ -557,7 +810,7 @@ export function SelectionPortal() {
                   <div className="flex-1">
                     <p className="text-sm font-bold text-on-surface">{guest.name}</p>
                     <p className="text-xs text-on-surface-variant">
-                      {guest.selected_count} / {selection?.max_photos} selected
+                      {guest.selected_count} / {selection?.max_photos > 0 ? selection.max_photos : '∞'} selected
                     </p>
                   </div>
                   <div className="text-right">
@@ -626,6 +879,8 @@ export function SelectionPortal() {
               const isFavByOther = photoFavs.length > 0 && !isFavByMe;
               const isSelectedForCompare = comparePhotos.includes(photo.id);
               
+              const isLocked = matchedPhotoIds.has(photo.id) && aiResults.indexOf(photo.id) >= aiLimit;
+              
               const imageUrl = supabase.storage.from('photos').getPublicUrl(photo.file_path).data.publicUrl;
 
               return (
@@ -638,9 +893,14 @@ export function SelectionPortal() {
                   className={cn(
                     "break-inside-avoid relative group rounded-xl sm:rounded-2xl overflow-hidden cursor-pointer touch-target active:scale-95 transition-transform",
                     (isFavByMe || isFavByOther) && !isCompareMode && "ring-2 sm:ring-4 ring-primary ring-offset-1 sm:ring-offset-2 ring-offset-bg-surface",
-                    isSelectedForCompare && isCompareMode && "ring-2 sm:ring-4 ring-blue-500 ring-offset-1 sm:ring-offset-2 ring-offset-bg-surface"
+                    isSelectedForCompare && isCompareMode && "ring-2 sm:ring-4 ring-blue-500 ring-offset-1 sm:ring-offset-2 ring-offset-bg-surface",
+                    matchedPhotoIds.has(photo.id) && !isLocked && "ring-2 ring-green-400"
                   )}
                   onClick={() => {
+                    if (isLocked) {
+                      setShowPaywall(true);
+                      return;
+                    }
                     if (isSubmitted) return;
                     if (isCompareMode) {
                       if (isSelectedForCompare) {
@@ -660,10 +920,18 @@ export function SelectionPortal() {
                     alt="Event Photo"
                     className={cn(
                       "w-full h-auto object-cover transition-transform duration-500",
-                      !isSubmitted && "group-hover:scale-105"
+                      !isSubmitted && "group-hover:scale-105",
+                      isLocked && "blur-xl grayscale opacity-50"
                     )}
                     loading="lazy"
                   />
+
+                  {isLocked && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/20 text-white p-4 text-center">
+                      <Lock size={24} className="mb-2" />
+                      <p className="text-[10px] font-bold uppercase tracking-wider">Unlock AI Match</p>
+                    </div>
+                  )}
                   
                   {/* Overlay Gradient */}
                   {!isSubmitted && !isCompareMode && (
@@ -844,6 +1112,58 @@ export function SelectionPortal() {
                 </div>
               );
             })}
+          </div>
+        </div>
+      )}
+      {/* Paywall Modal */}
+      {showPaywall && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-xl rounded-[2.5rem] p-8 md:p-12 shadow-2xl relative overflow-hidden">
+            <button 
+              onClick={() => setShowPaywall(false)}
+              className="absolute top-6 right-6 p-2 hover:bg-surface-container-low rounded-full transition-colors"
+            >
+              <X size={24} />
+            </button>
+
+            <div className="text-center mb-8">
+              <div className="w-16 h-16 bg-primary/10 text-primary rounded-full flex items-center justify-center mx-auto mb-4">
+                <Sparkles size={32} />
+              </div>
+              <h2 className="text-2xl md:text-3xl font-serif font-bold text-on-surface mb-2">Unlock All Matches</h2>
+              <p className="text-on-surface-variant">We found {aiResults.length} photos with your face. Unlock them to select for your album.</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+              <div className="border border-outline-variant/20 rounded-3xl p-6 text-center hover:border-primary transition-all group">
+                <h4 className="text-lg font-bold mb-1">5 Photos</h4>
+                <p className="text-2xl font-black text-primary mb-4">₹100</p>
+                <button className="w-full py-2 bg-surface-container-low rounded-full text-xs font-bold group-hover:bg-primary group-hover:text-white transition-all">Select</button>
+              </div>
+              <div className="border-2 border-primary rounded-3xl p-6 text-center shadow-lg shadow-primary/10 relative">
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-white text-[10px] font-bold px-3 py-1 rounded-full whitespace-nowrap">BEST VALUE</div>
+                <h4 className="text-lg font-bold mb-1">20 Photos</h4>
+                <p className="text-2xl font-black text-primary mb-4">₹170</p>
+                <button className="w-full py-2 bg-primary text-white rounded-full text-xs font-bold">Select</button>
+              </div>
+              <div className="border border-outline-variant/20 rounded-3xl p-6 text-center hover:border-primary transition-all group">
+                <h4 className="text-lg font-bold mb-1">30 Photos</h4>
+                <p className="text-2xl font-black text-primary mb-4">₹250</p>
+                <button className="w-full py-2 bg-surface-container-low rounded-full text-xs font-bold group-hover:bg-primary group-hover:text-white transition-all">Select</button>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4 p-4 bg-surface-container-low rounded-2xl mb-8">
+              <CreditCard size={20} className="text-on-surface-variant" />
+              <div className="flex-1">
+                <p className="text-xs font-bold">Secure Payment</p>
+                <p className="text-[10px] text-on-surface-variant">Payments are processed securely via encrypted gateway.</p>
+              </div>
+            </div>
+
+            <p className="text-[10px] text-center text-on-surface-variant">
+              By proceeding, you agree to our Terms of Service. Unlocked photos will be available immediately.
+            </p>
           </div>
         </div>
       )}

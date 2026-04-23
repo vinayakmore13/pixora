@@ -149,7 +149,10 @@ export function Dashboard() {
           <SidebarLink icon={<LayoutGrid size={20} />} label="Dashboard" to="/dashboard" active={location.pathname === '/dashboard'} />
           <SidebarLink icon={<MessageCircle size={20} />} label="Messages" to="/messages" active={location.pathname.startsWith('/messages')} />
           {profile?.user_type === 'photographer' && (
-            <SidebarLink icon={<User size={20} />} label="My Profile" to={`/photographer/${user?.id}`} active={location.pathname.startsWith('/photographer/') && !location.pathname.includes('/edit')} />
+            <>
+              <SidebarLink icon={<User size={20} />} label="My Profile" to={`/photographer/${user?.id}`} active={location.pathname.startsWith('/photographer/') && !location.pathname.includes('/edit')} />
+              <SidebarLink icon={<Camera size={20} />} label="Fast Selection" to="/fast-selection" active={location.pathname === '/fast-selection'} />
+            </>
           )}
           <SidebarLink icon={<HelpCircle size={20} />} label="Help & Support" to="/support" active={location.pathname === '/support'} />
         </nav>

@@ -85,6 +85,9 @@ const SmartSharePage = lazy(() =>
 const HelpSupport = lazy(() =>
   import("./components/HelpSupport").then((m) => ({ default: m.HelpSupport })),
 );
+const FastSelectionSection = lazy(() =>
+  import("./components/FastSelectionSection").then((m) => ({ default: m.FastSelectionSection })),
+);
 const NotFound = lazy(() =>
   import("./components/NotFound").then((m) => ({ default: m.NotFound })),
 );
@@ -304,6 +307,16 @@ function AppLayout() {
               <ProtectedRoute allowedUserTypes={["photographer"]}>
                 <Suspense fallback={<RouteLoadingFallback />}>
                   <UploadPhotos />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/fast-selection"
+            element={
+              <ProtectedRoute allowedUserTypes={["photographer"]}>
+                <Suspense fallback={<RouteLoadingFallback />}>
+                  <FastSelectionSection />
                 </Suspense>
               </ProtectedRoute>
             }

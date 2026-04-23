@@ -62,16 +62,19 @@ export const extractAllFaces = async (imageElement: HTMLImageElement | HTMLVideo
 };
 
 export const localProvider = {
-  async extractAndStore(imgElement: HTMLImageElement, photoId: string) {
+  async extractAndStore(imgElement: HTMLImageElement, photoId: string, isFastSelection: boolean = false) {
     const faces = await extractAllFaces(imgElement);
     if (faces && faces.length > 0) {
       const faceRecords = faces.map(f => ({
         photo_id: photoId,
         face_descriptor: `[${Array.from(f.descriptor).join(',')}]`
       }));
-      const { error: faceError } = await supabase.from('photo_faces').insert(faceRecords);
+      
+      const targetTable = isFastSelection ? 'fast_selection_photo_faces' : 'photo_faces';
+      const { error: faceError } = await supabase.from(targetTable).insert(faceRecords);
+      
       if (faceError) {
-        console.error("Local face extraction failed to save:", faceError);
+        console.error(`Local face extraction failed to save to ${targetTable}:`, faceError);
       }
     }
   },

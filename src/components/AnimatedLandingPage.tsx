@@ -18,7 +18,6 @@ import {
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useSmoothScroll } from '../hooks/useSmoothScroll';
-import { RecentEventsSlider } from './RecentEventsSlider';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -207,9 +206,6 @@ export function AnimatedLandingPage() {
           </div>
         </div>
       </section>
-
-      {/* Cinematic Recent Events Slider */}
-      <RecentEventsSlider />
 
       {/* Feature Grid with Animated Cards */}
       <section className="py-32 px-8 bg-surface">
