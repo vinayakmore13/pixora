@@ -16,7 +16,7 @@ import {
   Wifi,
   Sparkles,
   QrCode,
-  MessageCircle,
+  Upload,
   Users,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -630,6 +630,19 @@ export function EventManagement() {
                     />
                     <span className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant group-hover:text-primary">
                       View Gallery
+                    </span>
+                  </Link>
+
+                  <Link
+                    to="/upload"
+                    className="relative rounded-2xl overflow-hidden aspect-square bg-primary/5 flex flex-col items-center justify-center group cursor-pointer border-2 border-dashed border-primary/30 hover:border-primary transition-all"
+                  >
+                    <Upload
+                      size={24}
+                      className="text-primary mb-1 group-hover:scale-110 transition-transform"
+                    />
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-primary text-center px-2">
+                       Local / USB <br/>Upload
                     </span>
                   </Link>
                 </div>
