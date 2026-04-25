@@ -257,6 +257,13 @@ export class UploadManager {
         URL.revokeObjectURL(img.src);
       } catch (faceErr) {
         console.error("Browser-side AI face indexing failed:", faceErr);
+      } finally {
+        if (!this.fastSelectionId) {
+          await supabase
+            .from('photos')
+            .update({ processing_status: 'ready' })
+            .eq('id', photoId);
+        }
       }
 
       // Step 4: Complete

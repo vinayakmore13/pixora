@@ -362,12 +362,7 @@ export function Gallery() {
                     </div>
                   )}
 
-                  {photo.processing_status && photo.processing_status !== 'ready' && (
-                    <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center z-20 backdrop-blur-sm transition-all">
-                       <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin mb-3"></div>
-                       <span className="text-[10px] font-bold uppercase tracking-widest text-white">AI Processing...</span>
-                    </div>
-                  )}
+
 
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 p-6 flex flex-col justify-between">
                     <div className="flex justify-end gap-2">

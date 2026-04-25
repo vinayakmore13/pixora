@@ -6,7 +6,7 @@ interface UserProfile {
     id: string;
     email: string;
     full_name: string;
-    user_type: 'user' | 'photographer';
+    user_type: 'couple' | 'photographer';
     is_admin: boolean;
     avatar_url?: string;
     selfie_descriptor?: string;
@@ -18,7 +18,7 @@ interface AuthContextType {
     session: Session | null;
     profile: UserProfile | null;
     loading: boolean;
-    signUp: (email: string, password: string, fullName: string, userType: 'user' | 'photographer') => Promise<{ error: Error | null }>;
+    signUp: (email: string, password: string, fullName: string, userType: 'couple' | 'photographer') => Promise<{ error: Error | null }>;
     signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
     signOut: () => Promise<void>;
     updateProfile: (updates: Partial<UserProfile>) => Promise<{ error: Error | null }>;
@@ -245,7 +245,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         };
     }, [fetchProfile]);
 
-    async function signUp(email: string, password: string, fullName: string, userType: 'user' | 'photographer') {
+    async function signUp(email: string, password: string, fullName: string, userType: 'couple' | 'photographer') {
         try {
             console.log('[Auth] Attempting sign up for:', email);
 

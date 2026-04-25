@@ -7,25 +7,24 @@ import {
   Copy,
   Download,
   Edit3,
+  LayoutGrid,
   Loader2,
   Lock,
-  MoreVertical,
-  Plus,
-  Share2,
-  Trash2,
-  Wifi,
-  Sparkles,
+  MessageCircle,
   QrCode,
+  Share2,
+  Sparkles,
+  Trash2,
   Upload,
   Users,
+  CheckCircle2,
+  X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { supabase } from "../lib/supabaseClient";
 import { cn } from "../lib/utils";
-import { CameraSync } from "./CameraSync";
-import { CameraSyncManager } from "./CameraSyncManager";
 import { ClientSelections } from "./ClientSelections";
 
 interface Event {
@@ -58,7 +57,7 @@ export function EventManagement() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [activeTab, setActiveTab] = useState<
-    "overview" | "sync" | "guests" | "selections" | "sharing"
+    "overview" | "selections" | "guests" | "sharing"
   >("overview");
   const [guestStats, setGuestStats] = useState({
     registrations: 0,
@@ -73,6 +72,12 @@ export function EventManagement() {
       fetchEvent();
     }
   }, [id, user, authLoading]);
+
+  // Calculate 30-day expiration
+  const createdDate = event ? new Date(event.created_at) : new Date();
+  const expiresAt = new Date(createdDate.getTime() + 30 * 24 * 60 * 60 * 1000);
+  const daysRemaining = Math.max(0, Math.ceil((expiresAt.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)));
+
 
   async function fetchGuestStats() {
     if (!id) return;
@@ -340,19 +345,27 @@ export function EventManagement() {
               <ArrowLeft size={20} />
               <span className="font-medium">Back to Dashboard</span>
             </button>
-            <div className="flex items-center gap-3 text-primary font-bold text-xs uppercase tracking-[0.2em] mb-2">
-              <span
-                className={cn(
-                  "w-2 h-2 rounded-full animate-pulse",
-                  event.status === "live"
-                    ? "bg-green-500"
-                    : event.status === "upcoming"
-                      ? "bg-yellow-500"
-                      : "bg-gray-400",
-                )}
-              ></span>
-              {event.status.charAt(0).toUpperCase() + event.status.slice(1)}{" "}
-              Event
+            <div className="flex items-center gap-3 text-primary font-bold text-xs uppercase tracking-[0.2em] mb-2 flex-wrap">
+              <span className="flex items-center gap-2">
+                <span
+                  className={cn(
+                    "w-2 h-2 rounded-full animate-pulse",
+                    event.status === "live"
+                      ? "bg-green-500"
+                      : event.status === "upcoming"
+                        ? "bg-yellow-500"
+                        : "bg-gray-400",
+                  )}
+                ></span>
+                {event.status.charAt(0).toUpperCase() + event.status.slice(1)} Event
+              </span>
+              <span className="w-1 h-1 bg-outline-variant/50 rounded-full"></span>
+              <span className={cn(
+                "px-2 py-0.5 rounded-md",
+                daysRemaining <= 5 ? "bg-red-100 text-red-700" : "bg-surface-container-high text-on-surface-variant"
+              )}>
+                Expires in {daysRemaining} days
+              </span>
             </div>
             <h1 className="text-4xl md:text-5xl font-serif font-bold text-on-surface mb-2">
               {event.name}
@@ -389,41 +402,31 @@ export function EventManagement() {
           </div>
         </header>
 
-        {/* Tabs */}
+        {/* Tabs — Clean & Minimal */}
         <div className="flex gap-8 border-b border-outline-variant/10 mb-8 overflow-x-auto custom-scrollbar">
           <button
             onClick={() => setActiveTab("overview")}
             className={cn(
-              "pb-4 font-bold text-sm border-b-2 transition-colors whitespace-nowrap",
+              "pb-4 font-bold text-sm border-b-2 transition-colors whitespace-nowrap flex items-center gap-2",
               activeTab === "overview"
                 ? "border-primary text-primary"
                 : "border-transparent text-on-surface-variant hover:text-on-surface hover:border-outline-variant/30",
             )}
           >
-            Overview
-          </button>
-          <button
-            onClick={() => setActiveTab("sync")}
-            className={cn(
-              "pb-4 font-bold text-sm border-b-2 transition-colors whitespace-nowrap flex items-center gap-2",
-              activeTab === "sync"
-                ? "border-primary text-primary"
-                : "border-transparent text-on-surface-variant hover:text-on-surface hover:border-outline-variant/30",
-            )}
-          >
-            <Wifi size={16} />
-            Camera Sync
+            <QrCode size={16} />
+            QR Code
           </button>
           <button
             onClick={() => setActiveTab("selections")}
             className={cn(
-              "pb-4 font-bold text-sm border-b-2 transition-colors whitespace-nowrap",
+              "pb-4 font-bold text-sm border-b-2 transition-colors whitespace-nowrap flex items-center gap-2",
               activeTab === "selections"
                 ? "border-primary text-primary"
                 : "border-transparent text-on-surface-variant hover:text-on-surface hover:border-outline-variant/30",
             )}
           >
-            Client Selections
+            <LayoutGrid size={16} />
+            Photo Selection
           </button>
           <button
             onClick={() => setActiveTab("guests")}
@@ -451,7 +454,7 @@ export function EventManagement() {
           </button>
         </div>
 
-        {/* Event Quick Stats (Clean Summary Bar) */}
+        {/* Quick Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
             <div className="bg-white p-5 rounded-3xl silk-shadow border border-outline-variant/5">
                 <div className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">Registered Guests</div>
@@ -473,207 +476,120 @@ export function EventManagement() {
             </div>
         </div>
 
+        {/* Tab Content */}
         {activeTab === "overview" ? (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Left Column: QR & Controls */}
-            <div className="lg:col-span-1 space-y-8">
-              {/* QR Card */}
-              <div className="bg-white p-8 rounded-[2.5rem] silk-shadow border border-outline-variant/5">
-                <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-xl font-bold text-on-surface">
-                    Guest QR Code
-                  </h3>
-                  <button className="p-2 text-on-surface-variant hover:text-primary transition-colors">
-                    <MoreVertical size={20} />
-                  </button>
-                </div>
-                <div className="bg-surface-container-low p-6 rounded-3xl flex flex-col items-center mb-6">
-                  <div className="bg-white p-4 rounded-2xl shadow-sm mb-4">
-                    <img
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(`${window.location.origin}/e/${event.guest_qr_code || event.id}`)}`}
-                      alt="Event QR Code"
-                      width={160}
-                      height={160}
-                      className="rounded-lg shadow-sm"
-                      id="event-qr-img"
-                    />
-                  </div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-2">
-                    Scan to upload photos
-                  </p>
-                  <p className="text-2xl font-mono font-bold text-on-surface tracking-widest mb-4">
-                    {event.guest_qr_code || '---'}
-                  </p>
-                  <div className="flex gap-2 w-full">
-                    <a
-                      href={`https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(`${window.location.origin}/e/${event.guest_qr_code || event.id}`)}&format=png`}
-                      download={`qr-${event.guest_qr_code || event.id}.png`}
-                      className="flex-1 bg-on-surface text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-on-surface/90 transition-all"
-                    >
-                      <Download size={16} />
-                      Download
-                    </a>
-                    <button
-                      onClick={() => {
-                        const url = `${window.location.origin}/e/${event.guest_qr_code || event.id}`;
-                        if (navigator.share) {
-                          navigator.share({ title: event.name, url });
-                        } else {
-                          navigator.clipboard.writeText(url);
-                          setCopied(true);
-                          setTimeout(() => setCopied(false), 2000);
-                        }
-                      }}
-                      className="p-3 bg-white border border-outline-variant/20 rounded-xl text-on-surface hover:bg-surface-container-low transition-all"
-                    >
-                      <Share2 size={16} />
-                    </button>
-                  </div>
-                </div>
-                <div className="space-y-4">
-                  <PermissionItem
-                    label="Enable AI photo finder"
-                    checked={event.ai_enabled}
-                    onChange={handleToggleAiFinder}
-                  />
+          /* ─── QR CODE ONLY (Clean Overview) ─── */
+          <div className="max-w-2xl mx-auto">
+            <div className="bg-white p-8 md:p-10 rounded-[2.5rem] silk-shadow border border-outline-variant/5">
+              <div className="flex justify-between items-center mb-8">
+                <h3 className="text-2xl font-bold text-on-surface">
+                  Guest QR Code
+                </h3>
+                <div className={cn(
+                  "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest",
+                  event.status === 'live' ? "bg-green-100 text-green-700" :
+                  event.status === 'upcoming' ? "bg-yellow-100 text-yellow-700" :
+                  "bg-gray-100 text-gray-700"
+                )}>
+                  {event.status}
                 </div>
               </div>
 
-              {/* Password Card */}
-              <div className="bg-white p-8 rounded-[2.5rem] silk-shadow border border-outline-variant/5">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="p-2 rounded-xl bg-primary/10 text-primary">
-                    <Lock size={20} />
-                  </div>
-                  <h3 className="text-xl font-bold text-on-surface">
-                    Upload Password
-                  </h3>
+              {/* QR Image */}
+              <div className="bg-surface-container-low p-8 rounded-3xl flex flex-col items-center mb-8">
+                <div className="bg-white p-5 rounded-2xl shadow-sm mb-6">
+                  <img
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`${window.location.origin}/e/${event.guest_qr_code || event.id}`)}`}
+                    alt="Event QR Code"
+                    width={200}
+                    height={200}
+                    className="rounded-lg"
+                    id="event-qr-img"
+                  />
                 </div>
-                <div className="flex items-center gap-2 mb-6">
-                  <div className="flex-1 bg-surface-container-low border border-outline-variant/10 rounded-xl py-3 px-4 font-mono font-bold text-lg tracking-widest text-on-surface">
-                    {event.upload_password_hash}
-                  </div>
-                  <button
-                    onClick={handleCopy}
-                    className="p-3 bg-white border border-outline-variant/20 rounded-xl text-on-surface hover:bg-surface-container-low transition-all"
-                  >
-                    {copied ? (
-                      <Check size={20} className="text-green-600" />
-                    ) : (
-                      <Copy size={20} />
-                    )}
-                  </button>
-                </div>
-                <p className="text-xs text-on-surface-variant">
-                  Share this password with guests to allow photo uploads
+                <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-2">
+                  Scan to access event
+                </p>
+                <p className="text-3xl font-mono font-bold text-on-surface tracking-widest">
+                  {event.guest_qr_code || '---'}
                 </p>
               </div>
 
-              {/* Status Card */}
-              <div className="bg-white p-8 rounded-[2.5rem] silk-shadow border border-outline-variant/5">
-                <h3 className="text-xl font-bold text-on-surface mb-6">
-                  Event Status
-                </h3>
-                <div className="space-y-3">
-                  <StatusButton
-                    status="upcoming"
-                    currentStatus={event.status}
-                    onClick={() => handleStatusChange("upcoming")}
-                  />
-                  <StatusButton
-                    status="live"
-                    currentStatus={event.status}
-                    onClick={() => handleStatusChange("live")}
-                  />
-                  <StatusButton
-                    status="completed"
-                    currentStatus={event.status}
-                    onClick={() => handleStatusChange("completed")}
-                  />
+              {/* Actions */}
+              <div className="flex gap-3 mb-6">
+                <a
+                  href={`https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(`${window.location.origin}/e/${event.guest_qr_code || event.id}`)}&format=png`}
+                  download={`qr-${event.guest_qr_code || event.id}.png`}
+                  className="flex-1 bg-on-surface text-white py-4 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-on-surface/90 transition-all active:scale-[0.98]"
+                >
+                  <Download size={18} />
+                  Download QR
+                </a>
+                <button
+                  onClick={() => {
+                    const url = `${window.location.origin}/e/${event.guest_qr_code || event.id}`;
+                    if (navigator.share) {
+                      navigator.share({ title: event.name, url });
+                    } else {
+                      navigator.clipboard.writeText(url);
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 2000);
+                    }
+                  }}
+                  className="flex-1 bg-white border border-outline-variant/20 py-4 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 text-on-surface hover:bg-surface-container-low transition-all active:scale-[0.98]"
+                >
+                  {copied ? <Check size={18} className="text-green-600" /> : <Share2 size={18} />}
+                  {copied ? "Copied!" : "Share Link"}
+                </button>
+              </div>
+
+              {/* Guest Link Preview */}
+              <div className="bg-surface-container-low rounded-2xl p-4 flex items-center gap-3">
+                <div className="flex-1 text-sm font-mono text-on-surface-variant truncate">
+                  {window.location.origin}/e/{event.guest_qr_code || event.id}
                 </div>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(`${window.location.origin}/e/${event.guest_qr_code || event.id}`);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  }}
+                  className="p-2 bg-white rounded-xl text-on-surface-variant hover:text-primary transition-colors"
+                >
+                  {copied ? <Check size={16} className="text-green-600" /> : <Copy size={16} />}
+                </button>
+              </div>
+
+              {/* AI Toggle */}
+              <div className="mt-6 pt-6 border-t border-outline-variant/10">
+                <PermissionItem
+                  label="Enable AI photo finder for guests"
+                  checked={event.ai_enabled}
+                  onChange={handleToggleAiFinder}
+                />
+              </div>
+
+              {/* Quick Links */}
+              <div className="mt-6 flex gap-3">
+                <Link
+                  to={`/gallery/${event.id}`}
+                  className="flex-1 text-center text-primary font-bold text-sm py-3 rounded-2xl bg-primary/5 hover:bg-primary/10 transition-all"
+                >
+                  View Gallery →
+                </Link>
+                <Link
+                  to="/upload"
+                  className="flex-1 text-center text-secondary font-bold text-sm py-3 rounded-2xl bg-secondary/5 hover:bg-secondary/10 transition-all"
+                >
+                  Upload Photos →
+                </Link>
               </div>
             </div>
-
-            {/* Right Column: Photos & Activity */}
-            <div className="lg:col-span-2 space-y-8">
-              {/* Photo Stats */}
-              <div className="bg-white p-8 rounded-[2.5rem] silk-shadow border border-outline-variant/5">
-                <div className="flex justify-between items-end mb-6">
-                  <div>
-                    <h3 className="text-2xl font-bold text-on-surface mb-1">
-                      Photos
-                    </h3>
-                    <p className="text-on-surface-variant text-sm">
-                      0 photos uploaded of {event.max_photos.toLocaleString()}{" "}
-                      limit
-                    </p>
-                  </div>
-                  <Link
-                    to={`/gallery/${event.id}`}
-                    className="text-primary font-bold text-sm flex items-center gap-1 hover:underline"
-                  >
-                    View Full Gallery <ChevronRight size={16} />
-                  </Link>
-                </div>
-                <div className="w-full h-3 bg-surface-container-low rounded-full overflow-hidden mb-8">
-                  <div className="w-[0%] h-full bg-primary rounded-full"></div>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  <Link
-                    to={`/gallery/${event.id}`}
-                    className="relative rounded-2xl overflow-hidden aspect-square bg-surface-container-high flex flex-col items-center justify-center group cursor-pointer border-2 border-dashed border-outline-variant/30 hover:border-primary transition-all"
-                  >
-                    <Plus
-                      size={24}
-                      className="text-on-surface-variant group-hover:text-primary mb-1"
-                    />
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant group-hover:text-primary">
-                      View Gallery
-                    </span>
-                  </Link>
-
-                  <Link
-                    to="/upload"
-                    className="relative rounded-2xl overflow-hidden aspect-square bg-primary/5 flex flex-col items-center justify-center group cursor-pointer border-2 border-dashed border-primary/30 hover:border-primary transition-all"
-                  >
-                    <Upload
-                      size={24}
-                      className="text-primary mb-1 group-hover:scale-110 transition-transform"
-                    />
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-primary text-center px-2">
-                       Local / USB <br/>Upload
-                    </span>
-                  </Link>
-                </div>
-              </div>
-
-              {/* Recent Activity */}
-              <div className="bg-white p-8 rounded-[2.5rem] silk-shadow border border-outline-variant/5">
-                <h3 className="text-xl font-bold text-on-surface mb-6">
-                  Recent Activity
-                </h3>
-                <div className="text-center py-8 text-on-surface-variant">
-                  <Camera size={48} className="mx-auto mb-4 opacity-50" />
-                  <p>No activity yet</p>
-                  <p className="text-sm">
-                    Share your QR code or upload password to get started!
-                  </p>
-                </div>
-              </div>
-
-              {/* Camera Auto-Sync */}
-              <CameraSync eventId={event.id} eventTitle={event.name} />
-            </div>
           </div>
-        ) : activeTab === "sync" ? (
-          <div className="bg-white p-8 rounded-[2.5rem] silk-shadow border border-outline-variant/5">
-            <CameraSyncManager eventId={event.id} />
-          </div>
-        ) : activeTab === "guests" ? (
-          <GuestDeliveryManager eventId={event.id} />
         ) : activeTab === "selections" ? (
           <ClientSelections eventId={event.id} />
+        ) : activeTab === "guests" ? (
+          <GuestDeliveryManager eventId={event.id} />
         ) : (
           <SmartShareManager eventId={event.id} />
         )}
@@ -689,6 +605,10 @@ export function EventManagement() {
             <p className="text-on-surface-variant mb-6">
               Are you sure you want to delete "{event.name}"? This action cannot
               be undone and all photos will be permanently deleted.
+              <br/><br/>
+              <span className="text-sm font-medium border-l-2 border-primary pl-3 block text-primary/80">
+                Note: Events and their photos are automatically deleted 30 days after creation. You can manually delete them here anytime you've completed your work.
+              </span>
             </p>
             <div className="flex gap-4">
               <button
@@ -721,6 +641,9 @@ export function EventManagement() {
     </div>
   );
 }
+/* ═══════════════════════════════════════════════════════════════
+   SMART SHARE MANAGER
+   ═══════════════════════════════════════════════════════════════ */
 
 function SmartShareManager({ eventId }: { eventId: string }) {
   const [loading, setLoading] = useState(false);
@@ -803,7 +726,7 @@ function SmartShareManager({ eventId }: { eventId: string }) {
                     : "border-outline-variant/30 text-on-surface-variant hover:border-outline-variant"
                 )}
               >
-                < Wifi size={20} className="rotate-90" />
+                <QrCode size={20} />
                 <span className="font-bold text-sm">OTP (Auth)</span>
               </button>
             </div>
@@ -866,13 +789,17 @@ function SmartShareManager({ eventId }: { eventId: string }) {
   );
 }
 
+
+/* ═══════════════════════════════════════════════════════════════
+   GUEST DELIVERY MANAGER
+   ═══════════════════════════════════════════════════════════════ */
+
 function GuestDeliveryManager({ eventId }: { eventId: string }) {
   const [guests, setGuests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchGuests();
-    // Realtime listener for new registrations
     const channel = supabase
       .channel('guest_updates')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'guest_registrations', filter: `event_id=eq.${eventId}` }, fetchGuests)
@@ -1001,6 +928,11 @@ function GuestDeliveryManager({ eventId }: { eventId: string }) {
     </div>
   );
 }
+
+
+/* ═══════════════════════════════════════════════════════════════
+   HELPER COMPONENTS
+   ═══════════════════════════════════════════════════════════════ */
 
 function PermissionItem({
   label,

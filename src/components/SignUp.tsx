@@ -11,7 +11,7 @@ export function SignUp() {
     fullName: '',
     email: prefillEmail,
     password: '',
-    userType: 'user' as 'user' | 'photographer',
+    userType: 'couple' as 'couple' | 'photographer',
   });
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
@@ -115,8 +115,8 @@ export function SignUp() {
                 <input
                   type="radio"
                   name="userType"
-                  value="user"
-                  checked={formData.userType === 'user'}
+                  value="couple"
+                  checked={formData.userType === 'couple'}
                   onChange={handleInputChange}
                   className="peer sr-only"
                 />

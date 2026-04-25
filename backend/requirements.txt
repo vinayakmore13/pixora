@@ -1,12 +1,16 @@
 fastapi==0.104.1
 uvicorn==0.24.0
 gunicorn==21.2.0
-celery==5.3.4
-redis==5.0.1
-supabase==2.3.4
 python-dotenv==1.0.0
 requests==2.31.0
-deepface>=0.0.92
-tensorflow>=2.15.0
-tf-keras>=2.15.0
+supabase==2.3.4
 qrcode[pil]==7.4.2
+
+# AI / Facial Recognition (Self-Hosted)
+deepface>=0.0.92
+tensorflow>=2.15.0,<2.17.0
+tf-keras>=2.15.0
+
+# Optional: only needed if using Celery for background tasks
+# celery==5.3.4
+# redis==5.0.1

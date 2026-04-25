@@ -1,65 +1,6 @@
-import * as faceapi from 'face-api.js';
+import { extractFaceDescriptor, extractAllFaces } from '../faceApi';
+export { extractFaceDescriptor, extractAllFaces };
 import { supabase } from '../supabaseClient';
-
-let modelsLoaded = false;
-
-export const loadModels = async () => {
-  if (modelsLoaded) return;
-  
-  try {
-    let MODEL_URL = 'https://unpkg.com/face-api.js@0.22.2/dist/models';
-    try {
-      console.log('[FaceAPI] Trying unpkg CDN...');
-      await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL);
-    } catch (cdnErr) {
-      console.log('[FaceAPI] unpkg failed, trying jsDelivr...');
-      MODEL_URL = 'https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/models';
-      await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL);
-    }
-    
-    await Promise.all([
-      faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
-      faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
-    ]);
-    modelsLoaded = true;
-    console.log("Face API models loaded successfully from:", MODEL_URL);
-  } catch (err) {
-    console.error("Failed to load face API models:", err);
-    modelsLoaded = false;
-    throw new Error("Face detection unavailable. Please try again or refresh the page.");
-  }
-};
-
-export const extractFaceDescriptor = async (imageElement: HTMLImageElement | HTMLVideoElement | HTMLCanvasElement) => {
-  if (!modelsLoaded) {
-    await loadModels();
-  }
-  
-  const detection = await faceapi.detectSingleFace(imageElement)
-    .withFaceLandmarks()
-    .withFaceDescriptor();
-    
-  if (!detection) {
-    return null;
-  }
-  
-  return detection.descriptor;
-};
-
-export const extractAllFaces = async (imageElement: HTMLImageElement | HTMLVideoElement | HTMLCanvasElement) => {
-    if (!modelsLoaded) {
-      await loadModels();
-    }
-    
-    const detections = await faceapi.detectAllFaces(imageElement)
-      .withFaceLandmarks()
-      .withFaceDescriptors();
-      
-    return detections.map(d => ({
-        descriptor: d.descriptor,
-        box: d.detection.box
-    }));
-};
 
 export const localProvider = {
   async extractAndStore(imgElement: HTMLImageElement, photoId: string, isFastSelection: boolean = false) {

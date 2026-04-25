@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 
 interface ProtectedRouteProps {
     children: React.ReactNode;
-    allowedUserTypes?: ('user' | 'photographer')[];
+    allowedUserTypes?: ('couple' | 'photographer')[];
     requireAdmin?: boolean;
 }
 

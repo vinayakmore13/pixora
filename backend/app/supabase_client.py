@@ -4,7 +4,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-supabase_url = os.environ.get("VITE_SUPABASE_URL")
+# Accept both SUPABASE_URL (Render) and VITE_SUPABASE_URL (local dev)
+supabase_url = os.environ.get("SUPABASE_URL") or os.environ.get("VITE_SUPABASE_URL")
 supabase_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
 
 if not supabase_url or not supabase_key:

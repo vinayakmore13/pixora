@@ -99,7 +99,7 @@ export function SelfieCapture({
                 audio={false}
                 ref={webcamRef}
                 screenshotFormat="image/jpeg"
-                videoConstraints={{ facingMode: "user" }}
+                videoConstraints={{ facingMode: "user", width: 640, height: 480 }}
                 className="w-full h-full object-cover"
                 disablePictureInPicture={false}
                 forceScreenshotSourceSize={false}
