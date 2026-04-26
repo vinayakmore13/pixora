@@ -18,6 +18,7 @@ export function Marketplace() {
   const [maxPrice, setMaxPrice] = useState('');
   const [minRating, setMinRating] = useState<number>(0);
   const [sortBy, setSortBy] = useState('Recommended');
+  const [showFilters, setShowFilters] = useState(false);
 
   const styleOptions = ["Editorial", "Candid", "Traditional", "Cinematic", "Fine Art", "Classic", "Documentary"];
 
@@ -123,8 +124,8 @@ export function Marketplace() {
     <div className="pt-20 pb-20 bg-surface min-h-screen">
 
       {/* Hero Section */}
-      <section className="px-8 mb-16 mt-8">
-        <div className="max-w-7xl mx-auto bg-on-surface rounded-[3rem] p-12 md:p-20 text-white relative overflow-hidden">
+      <section className="px-4 md:px-8 mb-12 md:mb-16 mt-4 md:mt-8">
+        <div className="max-w-7xl mx-auto bg-on-surface rounded-[2.5rem] md:rounded-[3rem] p-8 md:p-20 text-white relative overflow-hidden">
           <div className="absolute right-0 top-0 w-1/2 h-full hidden lg:block">
             <div className="grid grid-cols-2 gap-4 rotate-12 translate-x-12 -translate-y-12 opacity-40">
               {[1, 2, 3, 4, 5, 6].map((i) => (
@@ -141,9 +142,9 @@ export function Marketplace() {
           </div>
           
           <div className="max-w-xl relative z-10">
-            <span className="text-primary-container font-bold tracking-widest text-xs uppercase mb-4 block">The Marketplace</span>
-            <h1 className="text-4xl md:text-6xl font-serif font-bold mb-8 leading-tight">Find the visionary for your forever.</h1>
-            <p className="text-white/70 text-lg mb-10 leading-relaxed">We've curated the world's most elite wedding photographers, vetted for their editorial eye and technical mastery.</p>
+            <span className="text-primary-container font-bold tracking-widest text-[10px] md:text-xs uppercase mb-3 md:mb-4 block">The Marketplace</span>
+            <h1 className="text-3xl md:text-6xl font-serif font-bold mb-6 md:mb-8 leading-tight">Find the visionary for your forever.</h1>
+            <p className="text-white/70 text-base md:text-lg mb-8 md:mb-10 leading-relaxed">We've curated the world's most elite wedding photographers, vetted for their editorial eye and technical mastery.</p>
             
             <div className="flex flex-col sm:flex-row gap-4">
               <div className="flex-1 relative">
@@ -153,12 +154,12 @@ export function Marketplace() {
                   value={searchLocation}
                   onChange={(e) => setSearchLocation(e.target.value)}
                   placeholder="Location (e.g. Udaipur, Goa)" 
-                  className="w-full bg-white/10 border border-white/20 rounded-full py-4 pl-12 pr-6 text-white placeholder:text-white/40 focus:ring-1 focus:ring-primary-container outline-none"
+                  className="w-full bg-white/10 border border-white/20 rounded-full py-3.5 md:py-4 pl-12 pr-6 text-white placeholder:text-white/40 focus:ring-1 focus:ring-primary-container outline-none text-sm"
                 />
               </div>
               <button 
                 onClick={fetchPhotographers}
-                className="bg-primary-container text-on-primary-container px-10 py-4 rounded-full font-bold hover:brightness-110 transition-all active:scale-95"
+                className="bg-primary-container text-on-primary-container px-10 py-3.5 md:py-4 rounded-full font-bold hover:brightness-110 transition-all active:scale-95"
               >
                 Search
               </button>
@@ -186,14 +187,25 @@ export function Marketplace() {
         </div>
       )}
 
-      <div className="max-w-7xl mx-auto px-8 grid grid-cols-1 lg:grid-cols-4 gap-12">
-        {/* Filters Sidebar */}
-        <aside className="lg:col-span-1 space-y-10">
+      <div className="max-w-7xl mx-auto px-4 md:px-8 grid grid-cols-1 lg:grid-cols-4 gap-12">
+        {/* Filters Sidebar (Collapsible on Mobile) */}
+        <aside className={cn(
+          "lg:col-span-1 space-y-10",
+          !showFilters ? "hidden lg:block" : "block"
+        )}>
           <div>
-            <h3 className="text-lg font-bold text-on-surface mb-6 flex items-center gap-2">
-              <Filter size={20} />
-              Filters
-            </h3>
+            <div className="flex justify-between items-center mb-6 lg:mb-8">
+              <h3 className="text-lg font-bold text-on-surface flex items-center gap-2">
+                <Filter size={20} />
+                Filters
+              </h3>
+              <button 
+                onClick={() => setShowFilters(false)}
+                className="lg:hidden text-on-surface-variant p-2"
+              >
+                Done
+              </button>
+            </div>
             
             <div className="space-y-8">
               <FilterGroup title="Photography Style">
@@ -214,7 +226,7 @@ export function Marketplace() {
                     value={minPrice}
                     onChange={(e) => setMinPrice(e.target.value)}
                     placeholder="Min" 
-                    className="w-full bg-white border border-outline-variant/20 rounded-xl py-2 px-4 text-sm" 
+                    className="w-full bg-white border border-outline-variant/20 rounded-xl py-2 px-4 text-sm outline-none focus:border-primary transition-colors" 
                   />
                   <span className="text-on-surface-variant">—</span>
                   <input 
@@ -222,7 +234,7 @@ export function Marketplace() {
                     value={maxPrice}
                     onChange={(e) => setMaxPrice(e.target.value)}
                     placeholder="Max" 
-                    className="w-full bg-white border border-outline-variant/20 rounded-xl py-2 px-4 text-sm" 
+                    className="w-full bg-white border border-outline-variant/20 rounded-xl py-2 px-4 text-sm outline-none focus:border-primary transition-colors" 
                   />
                 </div>
               </FilterGroup>
@@ -267,7 +279,7 @@ export function Marketplace() {
             </div>
           </div>
 
-          <div className="bg-primary/5 p-8 rounded-[2rem] border border-primary/10">
+          <div className="bg-primary/5 p-6 md:p-8 rounded-[2rem] border border-primary/10">
             <h4 className="font-bold text-primary mb-2">Are you a photographer?</h4>
             <p className="text-xs text-on-surface-variant mb-6 leading-relaxed">Join our elite network and get discovered by premium clients.</p>
             <Link to={user ? "/dashboard" : "/signup?type=photographer"} className="text-primary font-bold text-sm flex items-center gap-2 group">
@@ -278,9 +290,18 @@ export function Marketplace() {
 
         {/* Photographers Grid */}
         <main className="lg:col-span-3">
-          <div className="flex justify-between items-center mb-8">
-            <div className="text-sm font-bold text-on-surface-variant uppercase tracking-widest">
-              Showing {photographers.length} Photographers
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
+            <div className="flex items-center gap-4 w-full sm:w-auto">
+              <button 
+                onClick={() => setShowFilters(true)}
+                className="lg:hidden flex items-center gap-2 bg-white border border-outline-variant/20 px-4 py-2 rounded-full text-sm font-bold text-on-surface"
+              >
+                <Filter size={16} />
+                Filters
+              </button>
+              <div className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                {photographers.length} Photographers
+              </div>
             </div>
             <select 
               className="bg-transparent border-none text-sm font-bold text-primary outline-none cursor-pointer"

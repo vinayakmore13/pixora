@@ -421,8 +421,8 @@ function AppLayout() {
             }
           />
         </Routes>
+        {!isAdminRoute && <Footer />}
       </main>
-      {!isAdminRoute && <Footer />}
     </>
   );
 }

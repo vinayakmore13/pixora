@@ -403,55 +403,57 @@ export function EventManagement() {
         </header>
 
         {/* Tabs — Clean & Minimal */}
-        <div className="flex gap-8 border-b border-outline-variant/10 mb-8 overflow-x-auto custom-scrollbar">
-          <button
-            onClick={() => setActiveTab("overview")}
-            className={cn(
-              "pb-4 font-bold text-sm border-b-2 transition-colors whitespace-nowrap flex items-center gap-2",
-              activeTab === "overview"
-                ? "border-primary text-primary"
-                : "border-transparent text-on-surface-variant hover:text-on-surface hover:border-outline-variant/30",
-            )}
-          >
-            <QrCode size={16} />
-            QR Code
-          </button>
-          <button
-            onClick={() => setActiveTab("selections")}
-            className={cn(
-              "pb-4 font-bold text-sm border-b-2 transition-colors whitespace-nowrap flex items-center gap-2",
-              activeTab === "selections"
-                ? "border-primary text-primary"
-                : "border-transparent text-on-surface-variant hover:text-on-surface hover:border-outline-variant/30",
-            )}
-          >
-            <LayoutGrid size={16} />
-            Photo Selection
-          </button>
-          <button
-            onClick={() => setActiveTab("guests")}
-            className={cn(
-              "pb-4 font-bold text-sm border-b-2 transition-colors whitespace-nowrap flex items-center gap-2",
-              activeTab === "guests"
-                ? "border-primary text-primary"
-                : "border-transparent text-on-surface-variant hover:text-on-surface hover:border-outline-variant/30",
-            )}
-          >
-            <Sparkles size={16} />
-            Guest Delivery
-          </button>
-          <button
-            onClick={() => setActiveTab("sharing")}
-            className={cn(
-              "pb-4 font-bold text-sm border-b-2 transition-colors whitespace-nowrap flex items-center gap-2",
-              activeTab === "sharing"
-                ? "border-primary text-primary"
-                : "border-transparent text-on-surface-variant hover:text-on-surface hover:border-outline-variant/30",
-            )}
-          >
-            <Share2 size={16} />
-            AI Share Link
-          </button>
+        <div className="relative">
+          <div className="flex gap-8 border-b border-outline-variant/10 mb-8 overflow-x-auto custom-scrollbar [mask-image:linear-gradient(to_right,black_85%,transparent)] md:[mask-image:none]">
+            <button
+              onClick={() => setActiveTab("overview")}
+              className={cn(
+                "pb-4 font-bold text-sm border-b-2 transition-colors whitespace-nowrap flex items-center gap-2",
+                activeTab === "overview"
+                  ? "border-primary text-primary"
+                  : "border-transparent text-on-surface-variant hover:text-on-surface hover:border-outline-variant/30",
+              )}
+            >
+              <QrCode size={16} />
+              QR Code
+            </button>
+            <button
+              onClick={() => setActiveTab("selections")}
+              className={cn(
+                "pb-4 font-bold text-sm border-b-2 transition-colors whitespace-nowrap flex items-center gap-2",
+                activeTab === "selections"
+                  ? "border-primary text-primary"
+                  : "border-transparent text-on-surface-variant hover:text-on-surface hover:border-outline-variant/30",
+              )}
+            >
+              <LayoutGrid size={16} />
+              Photo Selection
+            </button>
+            <button
+              onClick={() => setActiveTab("guests")}
+              className={cn(
+                "pb-4 font-bold text-sm border-b-2 transition-colors whitespace-nowrap flex items-center gap-2",
+                activeTab === "guests"
+                  ? "border-primary text-primary"
+                  : "border-transparent text-on-surface-variant hover:text-on-surface hover:border-outline-variant/30",
+              )}
+            >
+              <Sparkles size={16} />
+              Guest Delivery
+            </button>
+            <button
+              onClick={() => setActiveTab("sharing")}
+              className={cn(
+                "pb-4 font-bold text-sm border-b-2 transition-colors whitespace-nowrap flex items-center gap-2",
+                activeTab === "sharing"
+                  ? "border-primary text-primary"
+                  : "border-transparent text-on-surface-variant hover:text-on-surface hover:border-outline-variant/30",
+              )}
+            >
+              <Share2 size={16} />
+              AI Share Link
+            </button>
+          </div>
         </div>
 
         {/* Quick Stats */}

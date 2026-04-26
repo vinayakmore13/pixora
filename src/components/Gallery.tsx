@@ -310,14 +310,16 @@ export function Gallery() {
         </header>
 
         {/* Filters */}
-        <div className="flex gap-4 mb-12 overflow-x-auto pb-4 scrollbar-hide">
-          <FilterChip label="All Photos" active={!showOnlyMatches} onClick={() => setShowOnlyMatches(false)} />
-          {matchedPhotos.length > 0 && (
-            <FilterChip label="My AI Matches" active={showOnlyMatches} onClick={() => setShowOnlyMatches(true)} />
-          )}
-          <FilterChip label="Ceremony" />
-          <FilterChip label="Reception" />
-          <FilterChip label="Guest Candid" />
+        <div className="relative">
+          <div className="flex gap-4 mb-12 overflow-x-auto pb-4 scrollbar-hide [mask-image:linear-gradient(to_right,black_85%,transparent)]">
+            <FilterChip label="All Photos" active={!showOnlyMatches} onClick={() => setShowOnlyMatches(false)} />
+            {matchedPhotos.length > 0 && (
+              <FilterChip label="My AI Matches" active={showOnlyMatches} onClick={() => setShowOnlyMatches(true)} />
+            )}
+            <FilterChip label="Ceremony" />
+            <FilterChip label="Reception" />
+            <FilterChip label="Guest Candid" />
+          </div>
         </div>
 
         {/* Photo Grid */}

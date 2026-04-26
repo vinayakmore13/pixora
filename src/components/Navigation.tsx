@@ -14,6 +14,7 @@ import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useLayout } from "../contexts/LayoutContext";
+import { cn } from "../lib/utils";
 
 export function Header() {
   const { toggleSidebar } = useLayout();
@@ -297,12 +298,21 @@ export function Header() {
 }
 
 export function Footer() {
+  const { isDesktopCollapsed } = useLayout();
+  const location = useLocation();
+  const isDashboard = location.pathname.startsWith("/dashboard") || 
+                      location.pathname.startsWith("/event") ||
+                      location.pathname.startsWith("/photographer/edit");
+
   return (
-    <footer className="w-full rounded-t-[24px] bg-surface-container-low">
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-12 px-12 py-20 max-w-7xl mx-auto text-sm leading-relaxed">
-        <div className="col-span-2 md:col-span-1 space-y-6">
-          <div className="text-lg font-bold text-on-surface">Pixora</div>
-          <p className="text-on-surface/60">
+    <footer className={cn(
+      "w-full rounded-t-[24px] bg-surface-container-low transition-all duration-300",
+      isDashboard && !isDesktopCollapsed ? "lg:ml-64 lg:w-[calc(100%-16rem)]" : "ml-0 w-full"
+    )}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-8 md:gap-12 px-6 md:px-12 py-12 md:py-20 max-w-7xl mx-auto text-sm leading-relaxed">
+        <div className="col-span-1 sm:col-span-2 md:col-span-1 space-y-6">
+          <div className="text-xl font-serif font-bold text-primary tracking-tighter">Pixora</div>
+          <p className="text-on-surface/60 max-w-xs">
             Elevating event memories through editorial design and intelligent
             technology.
           </p>
@@ -421,21 +431,21 @@ export function Footer() {
           </ul>
         </div>
 
-        <div className="col-span-2 md:col-span-1 space-y-4">
+        <div className="col-span-1 sm:col-span-2 md:col-span-1 space-y-4">
           <div className="font-bold text-on-surface">Newsletter</div>
-          <p className="text-on-surface/60">
+          <p className="text-on-surface/60 text-sm">
             Get inspiration and event tips directly in your inbox.
           </p>
           <div className="relative">
             <input
               type="email"
               placeholder="Your email"
-              className="w-full bg-surface-container border-none rounded-xl py-3 px-4 text-xs focus:ring-1 focus:ring-primary"
+              className="w-full bg-surface-container border border-outline-variant/10 rounded-xl py-3 px-4 text-sm focus:ring-1 focus:ring-primary outline-none transition-all"
             />
             <button
               type="button"
               onClick={() => {}}
-              className="absolute right-2 top-1.5 bg-primary text-white p-1.5 rounded-lg"
+              className="absolute right-2 top-1.5 bg-primary text-white p-1.5 rounded-lg hover:bg-primary/90 transition-all active:scale-95"
             >
               <ArrowRight size={14} />
             </button>
@@ -443,25 +453,25 @@ export function Footer() {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-12 pb-12 flex flex-col md:flex-row justify-between items-center border-t border-on-surface/5 pt-8 gap-4">
-        <div className="text-on-surface/60 text-xs">
+      <div className="max-w-7xl mx-auto px-6 md:px-12 pb-12 flex flex-col md:flex-row justify-between items-center border-t border-on-surface/5 pt-8 gap-6 md:gap-4">
+        <div className="text-on-surface/60 text-xs font-medium">
           © 2024 Pixora. The Digital Curator.
         </div>
-        <div className="flex gap-8 text-xs font-semibold">
+        <div className="flex flex-wrap justify-center gap-6 md:gap-8 text-[11px] font-bold uppercase tracking-wider">
           <Link
-            to="/features"
-            className="text-on-surface/60 hover:text-primary"
+            to="/legal"
+            className="text-on-surface/60 hover:text-primary transition-colors"
           >
             Legal
           </Link>
           <Link
-            to="/features"
-            className="text-on-surface/60 hover:text-primary"
+            to="/privacy"
+            className="text-on-surface/60 hover:text-primary transition-colors"
           >
             Privacy Policy
           </Link>
           <Link
-            to="/features"
+            to="/terms"
             className="text-on-surface/60 hover:text-primary"
           >
             Cookie Policy

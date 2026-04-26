@@ -90,35 +90,37 @@ export function PortfolioGallery({
     <div className="space-y-6">
       {/* Category Filter */}
       {categories.length > 0 && (
-        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
-          <button
-            onClick={() => setSelectedCategory(null)}
-            className={cn(
-              'px-4 py-2 rounded-full font-bold text-sm whitespace-nowrap transition-all',
-              selectedCategory === null
-                ? 'bg-on-surface text-white'
-                : 'bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high'
-            )}
-          >
-            All ({images.length})
-          </button>
-          {categories.map(category => {
-            const count = images.filter(img => img.category === category).length;
-            return (
-              <button
-                key={category}
-                onClick={() => setSelectedCategory(category)}
-                className={cn(
-                  'px-4 py-2 rounded-full font-bold text-sm whitespace-nowrap transition-all',
-                  selectedCategory === category
-                    ? 'bg-primary text-white'
-                    : 'bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high'
-                )}
-              >
-                {category} ({count})
-              </button>
-            );
-          })}
+        <div className="relative">
+          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none [mask-image:linear-gradient(to_right,black_85%,transparent)] md:[mask-image:none]">
+            <button
+              onClick={() => setSelectedCategory(null)}
+              className={cn(
+                'px-4 py-2 rounded-full font-bold text-sm whitespace-nowrap transition-all',
+                selectedCategory === null
+                  ? 'bg-on-surface text-white'
+                  : 'bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high'
+              )}
+            >
+              All ({images.length})
+            </button>
+            {categories.map(category => {
+              const count = images.filter(img => img.category === category).length;
+              return (
+                <button
+                  key={category}
+                  onClick={() => setSelectedCategory(category)}
+                  className={cn(
+                    'px-4 py-2 rounded-full font-bold text-sm whitespace-nowrap transition-all',
+                    selectedCategory === category
+                      ? 'bg-primary text-white'
+                      : 'bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high'
+                  )}
+                >
+                  {category} ({count})
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 
