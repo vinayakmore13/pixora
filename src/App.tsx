@@ -11,6 +11,7 @@ import { Footer, Header } from "./components/Navigation";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { AuthProvider } from "./contexts/AuthContext";
 import { LayoutProvider } from "./contexts/LayoutContext";
+import { SecureVerification } from './components/SecureVerification';
 
 // Eager load auth components
 import { ForgotPassword } from "./components/ForgotPassword";
@@ -85,8 +86,9 @@ const SmartSharePage = lazy(() =>
 const HelpSupport = lazy(() =>
   import("./components/HelpSupport").then((m) => ({ default: m.HelpSupport })),
 );
-const FastSelectionSection = lazy(() =>
-  import("./components/FastSelectionSection").then((m) => ({ default: m.FastSelectionSection })),
+
+const StudioBrandingSettings = lazy(() =>
+  import("./components/StudioBrandingSettings").then((m) => ({ default: m.StudioBrandingSettings })),
 );
 const NotFound = lazy(() =>
   import("./components/NotFound").then((m) => ({ default: m.NotFound })),
@@ -149,6 +151,7 @@ export default function App() {
               <Route path="/e/:qrCode" element={<PublicEventPage />} />
               <Route path="/select/:code" element={<SelectionPortal />} />
               <Route path="/share/:token" element={<SmartSharePage />} />
+              <Route path="/gallery/verify" element={<SecureVerification />} />
 
               {/* App routes with common header/footer */}
               <Route path="*" element={<AppLayout />} />
@@ -311,12 +314,13 @@ function AppLayout() {
               </ProtectedRoute>
             }
           />
+
           <Route
-            path="/fast-selection"
+            path="/studio/branding"
             element={
               <ProtectedRoute allowedUserTypes={["photographer"]}>
                 <Suspense fallback={<RouteLoadingFallback />}>
-                  <FastSelectionSection />
+                  <StudioBrandingSettings />
                 </Suspense>
               </ProtectedRoute>
             }

@@ -367,7 +367,7 @@ export function PhotographerProfile() {
             INSTAGRAM-STYLE TABS
             ═══════════════════════════════════════════════════════ */}
         <div className="border-t border-outline-variant/10">
-          <div className="flex justify-center gap-0">
+          <div className="flex justify-center sm:justify-center gap-0 overflow-x-auto no-scrollbar">
             <InstaTab icon={<Grid3X3 size={16} />} label="Posts" active={activeTab === 'portfolio'} onClick={() => setActiveTab('portfolio')} />
             <InstaTab icon={<Tag size={16} />} label="Packages" active={activeTab === 'packages'} onClick={() => setActiveTab('packages')} />
             <InstaTab icon={<Star size={16} />} label="Reviews" active={activeTab === 'reviews'} onClick={() => setActiveTab('reviews')} />

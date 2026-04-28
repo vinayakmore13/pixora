@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { azureStorageProvider } from './providers/azureStorageProvider';
 
 export interface Photo {
     id: string;
@@ -68,16 +69,14 @@ export async function fetchEventPhotos(
         // Generate public URLs for each photo
         const photosWithUrls = await Promise.all(
             (data || []).map(async (photo) => {
-                const { data: urlData } = supabase.storage
-                    .from('photos')
-                    .getPublicUrl(photo.file_path);
+                const publicUrl = azureStorageProvider.getBlobUrl(photo.file_path);
 
                 // Generate thumbnail URL (same as full URL for now, can be optimized later)
-                const thumbnailUrl = urlData.publicUrl;
+                const thumbnailUrl = publicUrl;
 
                 return {
                     ...photo,
-                    url: urlData.publicUrl,
+                    url: publicUrl,
                     thumbnail: thumbnailUrl,
                 };
             })
@@ -112,14 +111,12 @@ export async function getPhotoById(photoId: string): Promise<Photo | null> {
 
         if (!data) return null;
 
-        const { data: urlData } = supabase.storage
-            .from('photos')
-            .getPublicUrl(data.file_path);
+        const publicUrl = azureStorageProvider.getBlobUrl(data.file_path);
 
         return {
             ...data,
-            url: urlData.publicUrl,
-            thumbnail: urlData.publicUrl,
+            url: publicUrl,
+            thumbnail: publicUrl,
         };
     } catch (error) {
         console.error('Error in getPhotoById:', error);

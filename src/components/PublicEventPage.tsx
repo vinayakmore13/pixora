@@ -20,6 +20,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 import { cn } from '../lib/utils';
 import { SelfieCapture } from './SelfieCapture';
+import { LeadInquiryForm } from './LeadInquiryForm';
+import type { PhotographerBranding } from '../hooks/usePhotographerBranding';
 
 interface Event {
     id: string;
@@ -31,6 +33,8 @@ interface Event {
     guest_qr_code: string;
     upload_password_hash: string;
     status: 'upcoming' | 'live' | 'completed';
+    user_id?: string;
+    show_photographer_branding?: boolean;
 }
 
 type ViewMode = 'landing' | 'upload' | 'find_photos' | 'register' | 'selfie' | 'gallery';
@@ -60,6 +64,9 @@ export function PublicEventPage() {
 
     const [registrationId, setRegistrationId] = useState<string | null>(null);
     const [matches, setMatches] = useState<any[]>([]);
+
+    // Photographer branding
+    const [branding, setBranding] = useState<PhotographerBranding | null>(null);
 
     useEffect(() => {
         if (qrCode) {
@@ -169,6 +176,16 @@ export function PublicEventPage() {
 
             console.log('[PublicEventPage] Event found:', data[0].name);
             setEvent(data[0]);
+
+            // Fetch photographer branding
+            if (data[0].user_id) {
+                const { data: brandData } = await supabase
+                    .from('photographer_profiles')
+                    .select('studio_name, logo_url, brand_color_primary, brand_color_secondary, watermark_type, watermark_position, watermark_opacity, watermark_size, contact_phone, contact_email, website_url, instagram_handle, facebook_url, tagline, services_offered, bio, location, rating, reviews_count')
+                    .eq('id', data[0].user_id)
+                    .single();
+                if (brandData) setBranding(brandData as PhotographerBranding);
+            }
         } catch (err) {
             console.error('[PublicEventPage] Error fetching event:', err);
             setError(err instanceof Error ? err.message : 'Failed to load event');
@@ -286,19 +303,40 @@ export function PublicEventPage() {
                 {event.cover_image_url ? (
                     <img src={event.cover_image_url} alt={event.name} className="w-full h-full object-cover" />
                 ) : (
-                    <div className="w-full h-full bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center">
-                        <Camera size={48} className="text-primary/40" />
+                    <div className="w-full h-full flex items-center justify-center" style={{ background: branding?.brand_color_primary ? `linear-gradient(135deg, ${branding.brand_color_primary}30, ${branding.brand_color_secondary || '#1A1F3A'}30)` : 'linear-gradient(135deg, rgba(var(--primary-rgb, 180, 75, 75), 0.2), rgba(var(--secondary-rgb, 26, 31, 58), 0.2))' }}>
+                        {branding?.logo_url ? (
+                            <img src={branding.logo_url} alt={branding.studio_name || ''} className="h-20 w-auto object-contain opacity-60" />
+                        ) : (
+                            <Camera size={48} className="text-primary/40" />
+                        )}
                     </div>
                 )}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent"></div>
                 <div className="absolute bottom-0 left-0 right-0 p-6">
                     <div className="max-w-4xl mx-auto flex items-end justify-between">
                         <div>
+                            {/* Photographer Logo + Studio Name */}
+                            {branding?.studio_name && (
+                                <div className="flex items-center gap-3 mb-2">
+                                    {branding.logo_url && (
+                                        <img src={branding.logo_url} alt={branding.studio_name} className="h-8 w-auto object-contain rounded" />
+                                    )}
+                                    <span className="text-sm font-bold text-white/80">{branding.studio_name}</span>
+                                </div>
+                            )}
                             <h1 className="text-2xl md:text-3xl font-serif font-bold text-white mb-1">{event.name}</h1>
                             <div className="flex items-center gap-4 text-white/70 text-xs">
                                 <span className="flex items-center gap-1"><Clock size={14} /> {event.event_date ? new Date(event.event_date).toLocaleDateString() : 'Today'}</span>
                                 <span className="flex items-center gap-1"><MapPin size={14} /> {event.location || 'At the venue'}</span>
                             </div>
+                            {/* Contact info row */}
+                            {branding && (branding.contact_email || branding.contact_phone || branding.instagram_handle) && (
+                                <div className="flex items-center gap-4 mt-2 text-white/50 text-[10px] font-medium">
+                                    {branding.contact_email && <span className="flex items-center gap-1"><Mail size={10} /> {branding.contact_email}</span>}
+                                    {branding.contact_phone && <span className="flex items-center gap-1"><Phone size={10} /> {branding.contact_phone}</span>}
+                                    {branding.instagram_handle && <span>📷 {branding.instagram_handle}</span>}
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -571,6 +609,15 @@ export function PublicEventPage() {
                                 </div>
                             </div>
                         </div>
+                        {/* Lead Inquiry Form — only if photographer has branding */}
+                        {branding?.studio_name && event && (
+                            <LeadInquiryForm
+                                photographerId={event.user_id || ''}
+                                eventId={event.id}
+                                studioName={branding.studio_name}
+                                brandColorPrimary={branding.brand_color_primary}
+                            />
+                        )}
                     </div>
                 )}
             </div>

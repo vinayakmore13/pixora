@@ -1,6 +1,7 @@
 import { supabase } from './supabaseClient';
 import { compressImage, CompressedImage, getImageDimensions } from './imageCompression';
 import { faceEngine } from './faceEngine';
+import { azureStorageProvider } from './providers/azureStorageProvider';
 
 
 export interface UploadFile {
@@ -307,15 +308,10 @@ export class UploadManager {
     const folder = this.eventId ? `events/${this.eventId}` : `selections/${this.fastSelectionId}`;
     const fileName = `${folder}/${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
 
-    const { error: uploadError } = await supabase.storage
-      .from('photos')
-      .upload(fileName, file, {
-        cacheControl: '3600',
-        upsert: false,
-      });
-
-    if (uploadError) {
-      throw new Error(`Upload failed: ${uploadError.message}`);
+    try {
+      await azureStorageProvider.uploadFile(file, fileName, file.type);
+    } catch (uploadError: any) {
+      throw new Error(`Azure Upload failed: ${uploadError.message}`);
     }
 
     // Simulate progress for upload (since Supabase doesn't provide progress)

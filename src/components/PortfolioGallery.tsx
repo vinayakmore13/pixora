@@ -91,7 +91,7 @@ export function PortfolioGallery({
       {/* Category Filter */}
       {categories.length > 0 && (
         <div className="relative">
-          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none [mask-image:linear-gradient(to_right,black_85%,transparent)] md:[mask-image:none]">
+          <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
             <button
               onClick={() => setSelectedCategory(null)}
               className={cn(

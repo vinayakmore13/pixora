@@ -1,6 +1,5 @@
 import {
   ArrowLeft,
-  Bell,
   Calendar,
   Camera,
   ChevronRight,
@@ -141,10 +140,7 @@ export function AdminLayout({ children, title }: AdminLayoutProps) {
               />
             </div>
 
-            <button className="relative p-2 text-on-surface-variant hover:bg-surface-container rounded-full transition-colors">
-              <Bell size={20} />
-              <span className="absolute top-2 right-2.5 w-2 h-2 bg-primary rounded-full border-2 border-white"></span>
-            </button>
+
 
             <div className="flex items-center gap-3 pl-6 border-l border-outline-variant/10">
               <div className="text-right hidden sm:block">

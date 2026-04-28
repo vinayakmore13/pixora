@@ -1,4 +1,4 @@
-import { CheckCircle2, ChevronLeft, ChevronRight, Download, ScanFace, Sparkles, X } from 'lucide-react';
+import { CheckCircle2, ChevronLeft, ChevronRight, Download, ScanFace, Sparkles, X, ShieldCheck, LayoutGrid, Heart } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
@@ -9,17 +9,32 @@ import { supabase } from '../lib/supabaseClient';
 import { cn } from '../lib/utils';
 import { SelfieCapture } from './SelfieCapture';
 import { faceEngine } from '../lib/faceEngine';
+import { WatermarkedImage } from './WatermarkedImage';
+import { usePhotographerBranding } from '../hooks/usePhotographerBranding';
+import { SecureImage } from './SecureImage';
+import { getDeviceFingerprint, logSecurityEvent } from '../lib/securityEngine';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 
 const isHybridAzure = import.meta.env.VITE_AI_PROVIDER === 'AZURE';
 
 export function Gallery() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const { profile } = useAuth();
   
   // Data State
   const [photos, setPhotos] = useState<PhotoMetadata[]>([]);
-  const [eventData, setEventData] = useState<{ name: string; event_date: string } | null>(null);
+  const [eventData, setEventData] = useState<{ name: string; event_date: string; user_id?: string } | null>(null);
+
+  // Photographer Branding
+  const [isSecure, setIsSecure] = useState(false);
+  const { branding } = usePhotographerBranding(eventData?.user_id);
   const [loading, setLoading] = useState(true);
+
+  const isPhotographer = React.useMemo(() => 
+    profile?.user_type === 'photographer' || profile?.is_admin || eventData?.user_id === profile?.id
+  , [profile, eventData]);
   
   // Pagination State
   const [loadingMore, setLoadingMore] = useState(false);
@@ -28,6 +43,118 @@ export function Gallery() {
 
   // Tools & UI State
   const [isAIFinderOpen, setIsAIFinderOpen] = useState(false);
+  const [isSubmittingSelection, setIsSubmittingSelection] = useState(false);
+
+  const handleSubmitSelection = async () => {
+    if (selectedPhotoIds.size === 0) return;
+    
+    if (confirm(`Are you sure you want to submit these ${selectedPhotoIds.size} photos to the photographer?`)) {
+      try {
+        setIsSubmittingSelection(true);
+        
+        // 1. Get or create a photo_selections record for this event
+        const { data: selection, error: selError } = await supabase
+          .from('photo_selections')
+          .select('id')
+          .eq('event_id', id)
+          .maybeSingle();
+          
+        if (selError) throw selError;
+        
+        let selectionId = selection?.id;
+        
+        if (!selectionId) {
+          // If no selection portal exists, create a default one
+          const { data: newSel, error: createError } = await supabase
+            .from('photo_selections')
+            .insert({
+              event_id: id,
+              status: 'submitted',
+              max_photos: 50,
+              selection_code: Math.random().toString(36).substring(2, 8).toUpperCase()
+            })
+            .select()
+            .single();
+            
+          if (createError) throw createError;
+          selectionId = newSel.id;
+        }
+
+        // 2. Ensure guest record exists in photo_selection_guests
+        let guest_id;
+        const guestName = profile?.full_name || 'Gallery User';
+        const guestEmail = profile?.email || '';
+
+        // Try to find by email first (it's the primary unique constraint now)
+        let existingGuest = null;
+        if (guestEmail) {
+          const { data } = await supabase
+            .from('photo_selection_guests')
+            .select('id')
+            .eq('selection_id', selectionId)
+            .eq('email', guestEmail.trim())
+            .maybeSingle();
+          existingGuest = data;
+        }
+
+        // If not found by email, try by name (fallback)
+        if (!existingGuest) {
+          const { data } = await supabase
+            .from('photo_selection_guests')
+            .select('id')
+            .eq('selection_id', selectionId)
+            .eq('name', guestName.trim())
+            .maybeSingle();
+          existingGuest = data;
+        }
+
+        if (existingGuest) {
+          guest_id = existingGuest.id;
+        } else {
+          const { data: newGuest, error: guestErr } = await supabase
+            .from('photo_selection_guests')
+            .insert({
+              selection_id: selectionId,
+              name: guestName.trim(),
+              email: guestEmail ? guestEmail.trim() : null
+            })
+            .select()
+            .single();
+          
+          if (guestErr) throw guestErr;
+          guest_id = newGuest.id;
+        }
+
+        // 3. Save favorites
+        const favoriteInserts = Array.from(selectedPhotoIds).map(photoId => ({
+          selection_id: selectionId,
+          photo_id: photoId,
+          guest_id: guest_id
+        }));
+
+        const { error: favError } = await supabase
+          .from('photo_favorites')
+          .insert(favoriteInserts);
+          
+        if (favError) throw favError;
+
+        // 3. Update status to submitted
+        await supabase
+          .from('photo_selections')
+          .update({ status: 'submitted' })
+          .eq('id', selectionId);
+
+        alert('Success! Your selections have been sent to the photographer.');
+        setIsSelectionMode(false);
+        setSelectedPhotoIds(new Set());
+      } catch (err) {
+        console.error('Submit error:', err);
+        alert('Failed to submit selections. Please try again.');
+      } finally {
+        setIsSubmittingSelection(false);
+      }
+    }
+  };
   const [aiStep, setAiStep] = useState(0); 
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState<number | null>(null);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -36,7 +163,15 @@ export function Gallery() {
   
   // AI Matching state
   const [matchedPhotos, setMatchedPhotos] = useState<PhotoMetadata[]>([]);
+  const [clientSelectedPhotos, setClientSelectedPhotos] = useState<PhotoMetadata[]>([]);
   const [showOnlyMatches, setShowOnlyMatches] = useState(false);
+  const [showOnlyClientSelections, setShowOnlyClientSelections] = useState(false);
+  const [showOnlyMyPicks, setShowOnlyMyPicks] = useState(false);
+
+  // Compare Mode State
+  const [isCompareMode, setIsCompareMode] = useState(false);
+  const [comparePhotos, setComparePhotos] = useState<string[]>([]);
+  const [showCompareModal, setShowCompareModal] = useState(false);
 
   // Intersection Observer for Infinite Scroll
   const observerRef = useRef<IntersectionObserver | null>(null);
@@ -63,23 +198,21 @@ export function Gallery() {
     if (node) observerRef.current.observe(node);
   }, [loading, loadingMore, hasMore]);
 
-  // Fetch Event & Initial Photos
+  // 1. Initial Data & Realtime Setup
   useEffect(() => {
     if (!id) return;
 
-    const fetchEventData = async () => {
-      const { data, error } = await supabase
+    const fetchInitialData = async () => {
+      // Fetch Event Details
+      const { data: event, error: eventError } = await supabase
         .from('events')
-        .select('name, event_date')
+        .select('name, event_date, user_id')
         .eq('id', id)
         .single();
-        
-      if (!error && data) {
-        setEventData(data);
-      }
-    };
+      
+      if (event) setEventData(event);
 
-    const fetchInitialPhotos = async () => {
+      // Fetch Initial Photos
       setLoading(true);
       const result = await getPhotosByEventId(id, { limit: PHOTOS_PER_PAGE, offset: 0 });
       if (result.success && result.photos) {
@@ -87,23 +220,49 @@ export function Gallery() {
         setHasMore(result.photos.length === PHOTOS_PER_PAGE);
       }
       setLoading(false);
+
+      // Security Enforcement
+      try {
+        const isPhotographerUser = profile?.user_type === 'photographer' || profile?.is_admin || event?.user_id === profile?.id;
+        
+        if (!isPhotographerUser) {
+          const session = searchParams.get('session');
+          const fp = searchParams.get('fp');
+          
+          if (!session || !fp) {
+            console.warn('[SECURITY] No session found. Verifying access...');
+            navigate(`/gallery/verify?token=${id}`);
+            return;
+          }
+
+          setIsSecure(true);
+          const currentFp = await getDeviceFingerprint();
+          if (currentFp !== fp) {
+             navigate(`/gallery/verify?token=${id}&error=device_mismatch`);
+             return;
+          }
+          logSecurityEvent(session, 'page_view');
+        } else {
+          setIsSecure(false);
+          console.log('[SECURITY] Management view: Protective layer disabled.');
+        }
+      } catch (err) {
+        console.error('[SECURITY] Verification failed', err);
+      }
     };
 
-    fetchEventData();
-    fetchInitialPhotos();
+    fetchInitialData();
 
-    // Subscribe to photo updates for Realtime status changes (processing -> ready)
+    // Subscribe to photo status updates
     const channel = supabase
-      .channel('photos_status')
+      .channel('gallery_realtime')
       .on('postgres_changes', { 
         event: 'UPDATE', 
         schema: 'public', 
         table: 'photos',
         filter: `event_id=eq.${id}`
       }, (payload) => {
-        setPhotos(currentPhotos => 
-          currentPhotos.map(p => p.id === payload.new.id ? { ...p, ...payload.new } : p)
-        );
+        setPhotos(current => current.map(p => p.id === payload.new.id ? { ...p, ...payload.new } : p));
       })
       .on('postgres_changes', { 
         event: 'INSERT', 
@@ -111,14 +270,45 @@ export function Gallery() {
         table: 'photos',
         filter: `event_id=eq.${id}`
       }, (payload) => {
-        setPhotos(currentPhotos => [payload.new as PhotoMetadata, ...currentPhotos]);
+        setPhotos(current => [payload.new as PhotoMetadata, ...current]);
       })
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [id]);
+  }, [id, profile, searchParams, navigate]);
+
+  // 2. Separate Effect for Client Selections (Photographers Only)
+  useEffect(() => {
+    if (!id || !isPhotographer || photos.length === 0) return;
+
+    const fetchClientSelections = async () => {
+      try {
+        const { data: selection } = await supabase
+          .from('photo_selections')
+          .select('id')
+          .eq('event_id', id)
+          .maybeSingle();
+
+        if (selection) {
+          const { data: favorites } = await supabase
+            .from('photo_favorites')
+            .select('photo_id')
+            .eq('selection_id', selection.id);
+
+          if (favorites && favorites.length > 0) {
+            const selectedIds = favorites.map(f => f.photo_id);
+            setClientSelectedPhotos(photos.filter(p => selectedIds.includes(p.id)));
+          }
+        }
+      } catch (err) {
+        console.error('[MANAGEMENT] Failed to load client selections', err);
+      }
+    };
+
+    fetchClientSelections();
+  }, [id, isPhotographer, photos.length]);
 
   const loadMorePhotos = async () => {
     if (!id || loadingMore || !hasMore) return;
@@ -256,15 +446,44 @@ export function Gallery() {
     }
   };
 
+  const handleDeletePhoto = async (photo: PhotoMetadata, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (!isPhotographer) return;
+
+    if (confirm(`Are you sure you want to delete this photo permanently?`)) {
+      try {
+        const { error } = await supabase
+          .from('photos')
+          .delete()
+          .eq('id', photo.id);
+
+        if (error) throw error;
+
+        setPhotos(prev => prev.filter(p => p.id !== photo.id));
+        if (selectedPhotoIndex !== null) setSelectedPhotoIndex(null);
+        alert('Photo deleted successfully.');
+      } catch (err) {
+        console.error('Delete error:', err);
+        alert('Failed to delete photo.');
+      }
+    }
+  };
+
   // formatting
   const formattedDate = eventData?.event_date 
     ? new Date(eventData.event_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
     : 'Ongoing';
 
-  const displayedPhotos = showOnlyMatches ? matchedPhotos : photos;
+  const displayedPhotos = showOnlyClientSelections 
+    ? clientSelectedPhotos 
+    : (showOnlyMatches 
+        ? matchedPhotos 
+        : (showOnlyMyPicks 
+            ? photos.filter(p => selectedPhotoIds.has(p.id)) 
+            : photos));
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white pt-24 pb-20 px-8">
+    <div className="min-h-screen bg-[#0a0a0a] text-white pt-24 pb-20 px-8 no-screenshot">
       <div className="max-w-full mx-auto relative pb-24">
         {/* Gallery Header */}
         <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
@@ -273,6 +492,15 @@ export function Gallery() {
               <ChevronLeft size={24} />
             </Link>
             <div>
+              {/* Studio Branding in header */}
+              {branding?.studio_name && (
+                <div className="flex items-center gap-2 mb-2">
+                  {branding.logo_url && (
+                    <img src={branding.logo_url} alt={branding.studio_name} className="h-6 w-auto object-contain rounded" />
+                  )}
+                  <span className="text-xs font-bold text-white/50 uppercase tracking-widest">{branding.studio_name}</span>
+                </div>
+              )}
               {loading && !eventData ? (
                 <div className="h-8 w-64 bg-white/10 animate-pulse rounded mb-2"></div>
               ) : (
@@ -287,6 +515,27 @@ export function Gallery() {
           </div>
           
           <div className="flex flex-wrap items-center gap-4 w-full md:w-auto">
+            {isPhotographer && (
+              <button 
+                onClick={() => {
+                  setShowOnlyClientSelections(!showOnlyClientSelections);
+                  if (!showOnlyClientSelections) {
+                    // Pre-select all client photos for the photographer
+                    const ids = new Set(clientSelectedPhotos.map(p => p.id));
+                    setSelectedPhotoIds(ids);
+                    setIsSelectionMode(true);
+                  }
+                }}
+                className={cn(
+                  "px-6 py-2.5 rounded-full font-bold text-sm transition-all border flex items-center gap-2",
+                  showOnlyClientSelections ? "bg-primary border-primary text-white" : "bg-white/5 border-white/10 hover:bg-white/10"
+                )}
+              >
+                <CheckCircle2 size={18} />
+                {showOnlyClientSelections ? 'Show All Photos' : 'Manage Selections'}
+              </button>
+            )}
+
             <button 
               onClick={() => {
                 setIsSelectionMode(!isSelectionMode);
@@ -311,10 +560,46 @@ export function Gallery() {
 
         {/* Filters */}
         <div className="relative">
-          <div className="flex gap-4 mb-12 overflow-x-auto pb-4 scrollbar-hide [mask-image:linear-gradient(to_right,black_85%,transparent)]">
-            <FilterChip label="All Photos" active={!showOnlyMatches} onClick={() => setShowOnlyMatches(false)} />
+          <div className="flex gap-4 mb-12 overflow-x-auto pb-4 no-scrollbar">
+            <FilterChip label="All Photos" active={!showOnlyMatches && !showOnlyClientSelections && !showOnlyMyPicks} onClick={() => {
+              setShowOnlyMatches(false);
+              setShowOnlyClientSelections(false);
+              setShowOnlyMyPicks(false);
+            }} />
+            
+            {isPhotographer && clientSelectedPhotos.length > 0 && (
+              <FilterChip 
+                label={`Client Selected (${clientSelectedPhotos.length})`} 
+                active={showOnlyClientSelections} 
+                onClick={() => {
+                  setShowOnlyClientSelections(true);
+                  setShowOnlyMatches(false);
+                  setShowOnlyMyPicks(false);
+                  // Auto-select for bulk action
+                  setSelectedPhotoIds(new Set(clientSelectedPhotos.map(p => p.id)));
+                  setIsSelectionMode(true);
+                }} 
+              />
+            )}
+
+            {!isPhotographer && selectedPhotoIds.size > 0 && (
+              <FilterChip 
+                label={`My Picks (${selectedPhotoIds.size})`} 
+                active={showOnlyMyPicks} 
+                onClick={() => {
+                  setShowOnlyMyPicks(true);
+                  setShowOnlyMatches(false);
+                  setShowOnlyClientSelections(false);
+                }} 
+              />
+            )}
+
             {matchedPhotos.length > 0 && (
-              <FilterChip label="My AI Matches" active={showOnlyMatches} onClick={() => setShowOnlyMatches(true)} />
+              <FilterChip label="My AI Matches" active={showOnlyMatches} onClick={() => {
+                setShowOnlyMatches(true);
+                setShowOnlyClientSelections(false);
+                setShowOnlyMyPicks(false);
+              }} />
             )}
             <FilterChip label="Ceremony" />
             <FilterChip label="Reception" />
@@ -351,24 +636,60 @@ export function Gallery() {
                     isSelected ? "ring-4 ring-primary scale-[0.98]" : ""
                   )}
                 >
-                  <img src={photoUrl} alt={photo.file_name} className="w-full h-auto object-cover transition-transform duration-700 group-hover:scale-105" loading="lazy" />
-                  
-                  {isSelectionMode && (
-                    <div className="absolute top-4 left-4 z-10">
-                      <div className={cn(
-                        "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors",
-                        isSelected ? "bg-primary border-primary text-white" : "border-white bg-black/50"
-                      )}>
-                        {isSelected && <CheckCircle2 size={16} />}
+                  <div className="relative">
+                    {isPhotographer ? (
+                      <img 
+                        src={photoUrl} 
+                        alt={photo.file_name} 
+                        className="w-full h-auto transition-transform duration-700 group-hover:scale-105" 
+                        loading="lazy"
+                      />
+                    ) : (
+                      <SecureImage
+                        src={photoUrl}
+                        alt={photo.file_name}
+                        className="w-full h-auto transition-transform duration-700 group-hover:scale-105"
+                        isProtected={isSecure}
+                        watermarkText={profile?.email || 'GUEST'}
+                      />
+                    )}
+                    
+                    {!isSecure && (
+                      <div className="absolute top-4 right-4 z-10 flex flex-col gap-2">
+                        <button 
+                          onClick={(e) => handleSingleDownload(photo, e)}
+                          className="p-2 bg-white/10 backdrop-blur-md rounded-full hover:bg-primary transition-colors text-white"
+                        >
+                          <Download size={18} />
+                        </button>
+                        {isPhotographer && (
+                          <button 
+                            onClick={(e) => handleDeletePhoto(photo, e)}
+                            className="p-2 bg-red-500/20 backdrop-blur-md rounded-full hover:bg-red-500 transition-colors text-white border border-red-500/30"
+                          >
+                            <X size={18} />
+                          </button>
+                        )}
                       </div>
-                    </div>
-                  )}
+                    )}
+                    
+                    {isSelectionMode && (
+                      <div className="absolute top-4 left-4 z-10">
+                        <div className={cn(
+                          "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors",
+                          isSelected ? "bg-primary border-primary text-white" : "border-white bg-black/50"
+                        )}>
+                          {isSelected && <CheckCircle2 size={16} />}
+                        </div>
+                      </div>
+                    )}
+                  </div>
 
 
 
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 p-6 flex flex-col justify-between">
                     <div className="flex justify-end gap-2">
-                      {!isSelectionMode && (
+                      {!isSelectionMode && !isSecure && (
                         <button 
                           onClick={(e) => handleSingleDownload(photo, e)}
                           className="p-2 bg-white/10 backdrop-blur-md rounded-full hover:bg-primary transition-colors"
@@ -397,31 +718,6 @@ export function Gallery() {
            </div>
         )}
 
-        {/* Selection Floating Bar */}
-        <AnimatePresence>
-          {isSelectionMode && selectedPhotoIds.size > 0 && (
-            <motion.div
-              initial={{ y: 100, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 100, opacity: 0 }}
-              className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-[#1a1a1a] border border-white/10 px-8 py-4 rounded-full shadow-2xl flex items-center gap-6 z-50"
-            >
-              <span className="font-bold">{selectedPhotoIds.size} Selected</span>
-              <button 
-                onClick={handleBulkDownload}
-                disabled={isDownloadingZip}
-                className="bg-primary px-6 py-2 rounded-full font-bold shadow-lg shadow-primary/20 hover:brightness-110 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-50"
-              >
-                {isDownloadingZip ? (
-                  <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
-                ) : (
-                  <Download size={18} />
-                )}
-                {isDownloadingZip ? 'Zipping...' : 'Download ZIP'}
-              </button>
-            </motion.div>
-          )}
-        </AnimatePresence>
       </div>
 
       {/* Lightbox Modal */}
@@ -439,18 +735,36 @@ export function Gallery() {
                 {selectedPhotoIndex + 1} / {displayedPhotos.length}
               </div>
               <div className="flex gap-4">
-                <button 
-                  onClick={(e) => handleSingleDownload(displayedPhotos[selectedPhotoIndex], e)}
-                  className="p-2 hover:bg-white/10 rounded-full transition-colors"
-                >
-                  <Download size={24} />
-                </button>
-                <button 
-                  onClick={() => setSelectedPhotoIndex(null)}
-                  className="p-2 hover:bg-white/10 rounded-full transition-colors"
-                >
-                  <X size={24} />
-                </button>
+                {!isSecure ? (
+                  <button 
+                    onClick={(e) => handleSingleDownload(displayedPhotos[selectedPhotoIndex], e)}
+                    className="p-2 hover:bg-white/10 rounded-full transition-colors"
+                  >
+                    <Download size={24} />
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-2 px-3 py-1 bg-primary/20 text-primary rounded-full border border-primary/30">
+                    <ShieldCheck size={14} />
+                    <span className="text-[10px] font-bold uppercase tracking-widest">Protected</span>
+                  </div>
+                )}
+                <div className="flex items-center gap-4">
+                  {isPhotographer && (
+                    <button 
+                      onClick={(e) => handleDeletePhoto(displayedPhotos[selectedPhotoIndex], e)}
+                      className="flex items-center gap-2 px-4 py-2 bg-red-500/20 hover:bg-red-500 rounded-full transition-all text-xs font-bold border border-red-500/30"
+                    >
+                      <X size={16} />
+                      Delete Photo
+                    </button>
+                  )}
+                  <button 
+                    onClick={() => setSelectedPhotoIndex(null)}
+                    className="p-2 hover:bg-white/10 rounded-full transition-colors"
+                  >
+                    <X size={24} />
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -466,24 +780,23 @@ export function Gallery() {
                 <ChevronLeft size={32} />
               </button>
                
-              <motion.img 
-                key={selectedPhotoIndex}
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                transition={{ duration: 0.2 }}
-                drag="x"
-                dragConstraints={{ left: 0, right: 0 }}
-                dragElastic={1}
-                onDragEnd={(e, { offset, velocity }) => {
-                  const swipe = offset.x;
-                  if (swipe < -50) handleNextPhoto();
-                  else if (swipe > 50) handlePrevPhoto();
-                }}
-                src={getPhotoPublicUrl(displayedPhotos[selectedPhotoIndex].file_path)} 
-                alt="Selected" 
-                className="max-h-[85vh] max-w-full object-contain cursor-grab active:cursor-grabbing" 
-              />
+              <div className="relative w-full h-full flex items-center justify-center">
+                {isPhotographer ? (
+                  <img 
+                    src={getPhotoPublicUrl(displayedPhotos[selectedPhotoIndex].file_path)} 
+                    alt="Selected" 
+                    className="max-h-[85vh] max-w-full object-contain"
+                  />
+                ) : (
+                  <SecureImage 
+                    src={getPhotoPublicUrl(displayedPhotos[selectedPhotoIndex].file_path)} 
+                    alt="Selected" 
+                    className="max-h-[85vh] max-w-full"
+                    isProtected={isSecure}
+                    watermarkText={`${profile?.email || 'GUEST'}-${id}`}
+                  />
+                )}
+              </div>
               
               <button 
                 onClick={handleNextPhoto}
@@ -619,9 +932,169 @@ export function Gallery() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Selection Floating Bar */}
+      <AnimatePresence>
+        {isSelectionMode && selectedPhotoIds.size > 0 && (
+          <motion.div
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 100, opacity: 0 }}
+            className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-[#1a1a1a]/95 backdrop-blur-xl border border-white/10 px-8 py-4 rounded-full shadow-2xl flex items-center gap-6 z-[100]"
+          >
+            <div className="flex flex-col">
+              <span className="font-bold text-white">{selectedPhotoIds.size} Selected</span>
+              {showOnlyClientSelections && (
+                <span className="text-[10px] text-primary font-bold uppercase tracking-widest">Client Picks</span>
+              )}
+            </div>
+
+            <div className="h-8 w-px bg-white/10 mx-2" />
+
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={() => {
+                  if (selectedPhotoIds.size === displayedPhotos.length) {
+                    setSelectedPhotoIds(new Set());
+                  } else {
+                    setSelectedPhotoIds(new Set(displayedPhotos.map(p => p.id)));
+                  }
+                }}
+                className="bg-white/5 hover:bg-white/10 px-6 py-2 rounded-full font-bold text-sm transition-all text-white/70 hover:text-white"
+              >
+                {selectedPhotoIds.size === displayedPhotos.length ? 'Deselect All' : 'Select All'}
+              </button>
+
+              <button 
+                onClick={handleBulkDownload}
+                disabled={isDownloadingZip}
+                className="signature-gradient px-6 py-2 rounded-full font-bold text-sm shadow-lg shadow-primary/20 hover:brightness-110 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-50"
+              >
+                {isDownloadingZip ? (
+                  <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
+                ) : (
+                  <Download size={18} />
+                )}
+                {isDownloadingZip ? 'Preparing ZIP...' : 'Download High-Res ZIP'}
+              </button>
+
+              <div className="h-8 w-px bg-white/10 mx-2" />
+
+              <button
+                onClick={() => {
+                  setIsCompareMode(!isCompareMode);
+                  if (!isCompareMode) {
+                    setComparePhotos(Array.from(selectedPhotoIds).slice(0, 4));
+                    setShowCompareModal(true);
+                  } else {
+                    setShowCompareModal(false);
+                  }
+                }}
+                className={cn(
+                  "px-6 py-2 rounded-full font-bold text-sm transition-all flex items-center gap-2",
+                  isCompareMode ? "bg-primary text-white" : "bg-white/5 text-white/70 hover:bg-white/10"
+                )}
+              >
+                <LayoutGrid size={18} />
+                Compare Side-by-Side
+              </button>
+            </div>
+
+            {!isPhotographer && (
+              <button 
+                onClick={handleSubmitSelection}
+                disabled={isSubmittingSelection}
+                className="bg-green-500/20 text-green-500 border border-green-500/30 px-8 py-2 rounded-full font-bold shadow-lg hover:bg-green-500/30 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-50"
+              >
+                {isSubmittingSelection ? (
+                  <div className="w-4 h-4 border-2 border-green-500/20 border-t-green-500 rounded-full animate-spin"></div>
+                ) : (
+                  <CheckCircle2 size={18} />
+                )}
+                <span>Submit Final Selection</span>
+              </button>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Compare Modal */}
+      {showCompareModal && comparePhotos.length > 0 && (
+        <div className="fixed inset-0 bg-black/98 z-[200] flex flex-col">
+          <div className="p-6 flex justify-between items-center text-white border-b border-white/10 bg-black/50 backdrop-blur-md">
+            <div>
+              <h2 className="text-xl font-bold">Compare Selection</h2>
+              <p className="text-xs text-white/50">{comparePhotos.length} photos chosen for comparison</p>
+            </div>
+            <button 
+              onClick={() => {
+                setShowCompareModal(false);
+                setIsCompareMode(false);
+              }} 
+              className="p-3 hover:bg-white/10 rounded-full transition-colors"
+            >
+              <X size={24} />
+            </button>
+          </div>
+          <div className={cn(
+            "flex-1 p-6 grid gap-6 overflow-auto",
+            comparePhotos.length === 1 ? "grid-cols-1" : 
+            comparePhotos.length === 2 ? "grid-cols-2" : 
+            comparePhotos.length === 3 ? "grid-cols-3" : 
+            "grid-cols-2 grid-rows-2"
+          )}>
+            {comparePhotos.map(photoId => {
+              const photo = photos.find(p => p.id === photoId);
+              if (!photo) return null;
+              
+              const isFav = selectedPhotoIds.has(photo.id);
+              const imageUrl = getPhotoPublicUrl(photo.file_path);
+              
+              return (
+                <div key={photoId} className="relative flex flex-col items-center justify-center bg-white/5 rounded-3xl overflow-hidden group border border-white/10">
+                  <img src={imageUrl} alt="Compare" className="max-w-full max-h-full object-contain p-4" />
+                  
+                  <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-4">
+                    <button
+                      onClick={(e) => toggleSelection(photo.id, e as any)}
+                      className={cn(
+                        "p-4 rounded-full shadow-2xl transition-all",
+                        isFav ? "bg-primary text-white scale-110" : "bg-white/90 text-gray-900 hover:bg-primary hover:text-white"
+                      )}
+                    >
+                      <Heart size={24} className={cn(isFav && "fill-current")} />
+                    </button>
+                    <button
+                      onClick={() => {
+                        setComparePhotos(prev => prev.filter(id => id !== photoId));
+                      }}
+                      className="p-4 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-2xl"
+                    >
+                      <X size={20} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {comparePhotos.length === 0 && (
+            <div className="flex-1 flex flex-col items-center justify-center text-white/40">
+              <p>No photos selected for comparison.</p>
+              <button 
+                onClick={() => setShowCompareModal(false)}
+                className="mt-4 text-primary font-bold hover:underline"
+              >
+                Close Comparison
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
+
+
 
 function FilterChip({ label, active = false, onClick }: { label: string, active?: boolean, onClick?: () => void }) {
   return (

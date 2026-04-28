@@ -1,4 +1,5 @@
-import { CheckCircle2, CopyPlus, Heart, Info, Loader2, X, Search, Sparkles, Lock, CreditCard, Mail, Phone, ShieldCheck } from 'lucide-react';
+import { CheckCircle2, CopyPlus, Heart, Info, Loader2, X, Search, Sparkles, Lock, CreditCard, Mail, Phone, ShieldCheck, LayoutGrid, Download, CheckSquare, Trash2 } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getRealtimeSelectionService, GuestActivity } from '../lib/realtimeSelection';
@@ -8,6 +9,9 @@ import { cn } from '../lib/utils';
 import { GuestActivityFeed, GuestPresence } from './GuestActivityFeed';
 import { SelectionAssistant, SelectionSuggestions } from './SelectionSuggestions';
 import { faceEngine } from '../lib/faceEngine';
+import { usePhotographerBranding } from '../hooks/usePhotographerBranding';
+import { SecureImage } from './SecureImage';
+import { logSecurityEvent, getDeviceFingerprint } from '../lib/securityEngine';
 
 interface Photo {
   id: string;
@@ -23,6 +27,10 @@ interface SelectionConfig {
   max_photos: number;
   status: string;
   deadline: string | null;
+  view_count: number;
+  max_views: number;
+  is_secure_mode: boolean;
+  event?: any;
 }
 
 interface Favorite {
@@ -37,6 +45,19 @@ interface GuestStatus {
   selected_count: number;
   last_activity: string;
 }
+
+
+const SECURITY_STYLES = `
+  @media print {
+    body { display: none !important; }
+  }
+  .secure-portal, .no-screenshot {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+  }
+`;
 
 export function SelectionPortal() {
   const { code } = useParams();
@@ -75,6 +96,9 @@ export function SelectionPortal() {
   const [otpSent, setOtpSent] = useState(false);
   const [enteredOtp, setEnteredOtp] = useState('');
   
+  const { user } = useAuth();
+  const isPhotographer = user && selection?.event?.user_id === user.id;
+
   const [isAiSearching, setIsAiSearching] = useState(false);
   const [aiLimit, setAiLimit] = useState(1);
   const [aiResults, setAiResults] = useState<string[]>([]); // Ranked IDs
@@ -84,8 +108,38 @@ export function SelectionPortal() {
   // AI Suggestions State
   const [suggestions, setSuggestions] = useState<PhotoScore[]>([]);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const photoGridRef = useRef<HTMLDivElement>(null);
   const photoRefsMap = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  // Get branding if event is loaded
+  const { branding, loading: brandingLoading } = usePhotographerBranding(selection?.event?.photographer_id || '');
+
+  const [isBlurred, setIsBlurred] = useState(false);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (selection?.is_secure_mode && document.visibilityState === 'hidden') {
+        setIsBlurred(true);
+      } else {
+        setIsBlurred(false);
+      }
+    };
+
+    const handleKeydown = (e: KeyboardEvent) => {
+      if (selection?.is_secure_mode && (e.key === 'PrintScreen' || (e.ctrlKey && e.key === 'p'))) {
+        e.preventDefault();
+        alert('Screen capture and printing are disabled for security.');
+      }
+    };
+
+    window.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('keydown', handleKeydown);
+    return () => {
+      window.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('keydown', handleKeydown);
+    };
+  }, [selection]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -175,24 +229,46 @@ export function SelectionPortal() {
   const loadSelectionData = async () => {
     try {
       setLoading(true);
-      // 1. Get selection config (Try event-based first)
+      // 1. Get selection config
       const { data: selData, error: selError } = await supabase
         .from('photo_selections')
-        .select('*')
+        .select('*, event:events(*)')
         .eq('selection_code', code)
         .maybeSingle();
         
       if (selData) {
+        const isPhotographerUser = user && selData.event?.user_id === user.id;
+
+        // Enforce view limits for secure mode (Bypass for photographer)
+        if (!isPhotographerUser && selData.is_secure_mode && selData.max_views > 0 && selData.view_count >= selData.max_views) {
+          setError('Access limit reached. This selection portal has been viewed too many times.');
+          setLoading(false);
+          return;
+        }
+
+        // Increment view count via RPC (Skip for photographer)
+        if (!isPhotographerUser) {
+          await supabase.rpc('increment_selection_view', { 
+            p_selection_id: selData.id,
+            p_guest_id: guestId,
+            p_user_agent: navigator.userAgent
+          });
+        }
+
         setIsFastSelection(false);
         setSelection(selData);
 
         // Get photos
-        const { data: photoData } = await supabase
+        const photosQuery = supabase
           .from('photos')
           .select('*')
-          .eq('event_id', selData.event_id)
-          .eq('is_edited', true)
-          .order('created_at', { ascending: true });
+          .eq('event_id', selData.event_id);
+          
+        if (!isPhotographerUser) {
+          photosQuery.eq('is_in_selection_pool', true);
+        }
+
+        const { data: photoData } = await photosQuery.order('created_at', { ascending: true });
           
         setPhotos(photoData || []);
         loadFavorites(selData.id);
@@ -335,13 +411,20 @@ export function SelectionPortal() {
   const handleAIFaceSearch = async (imageFile: File) => {
     setIsAiSearching(true);
     try {
+      // Convert File to HTMLImageElement for face-api.js
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(imageFile);
+      img.src = objectUrl;
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+      });
+
       // 1. Get embeddings for search image
-      const searchResult = await faceEngine.findMyPhotos(imageFile, photos.map(p => ({
-        id: p.id,
-        file_path: p.file_path
-      })));
+      const searchResult = await faceEngine.findMyPhotos(img, selection!.event_id);
+      URL.revokeObjectURL(objectUrl);
       
-      const rankedIds = searchResult.map(r => r.id);
+      const rankedIds = searchResult.map(r => r.photo_id);
       setAiResults(rankedIds);
       setMatchedPhotoIds(new Set(rankedIds));
       
@@ -512,52 +595,62 @@ export function SelectionPortal() {
 
   const handleSubmitSelections = async () => {
     if (!selection) return;
-    const uniqueFavs = new Set(favorites.map(f => f.photo_id));
+    const uniqueFavsCount = favorites.filter(f => f.guest_id === guestId).length;
     
-    // If max_photos is 0, it means unlimited
-    if (selection.max_photos > 0 && uniqueFavs.size > selection.max_photos) {
-      alert(`You have selected too many photos. Please remove ${uniqueFavs.size - selection.max_photos} photos to stay within the limit of ${selection.max_photos}.`);
+    if (selection.max_photos > 0 && uniqueFavsCount > selection.max_photos) {
+      alert(`Please remove ${uniqueFavsCount - selection.max_photos} photos to stay within the limit.`);
       return;
     }
     
-    if (uniqueFavs.size === 0) {
-      alert("Please select at least one photo before submitting.");
+    if (uniqueFavsCount === 0) {
+      alert("Please select some photos first!");
       return;
     }
     
-    if (confirm('Are you sure you want to finalize and submit these selections to the photographer? This cannot be undone.')) {
+    if (confirm('Finalize your selection? You will not be able to change it after submitting.')) {
       try {
         setSubmitting(true);
         
+        // 1. Update the correct tables based on selection type
         if (isFastSelection) {
           // Update client status
-          const { error: clientError } = await supabase
+          await supabase
             .from('fast_selection_clients')
             .update({ status: 'submitted' })
             .eq('id', guestId);
-          
-          if (clientError) throw clientError;
 
           // Update overall session status
-          const { error: sessionError } = await supabase
+          await supabase
             .from('fast_selection_sessions')
             .update({ status: 'submitted' })
             .eq('id', selection.id);
-
-          if (sessionError) throw sessionError;
         } else {
-          const { error } = await supabase
+          // Update the overall portal status
+          const { error: selError } = await supabase
             .from('photo_selections')
-            .update({ status: 'submitted' })
+            .update({ 
+              status: 'submitted',
+              is_submitted: true 
+            })
             .eq('id', selection.id);
             
-          if (error) throw error;
+          if (selError) throw selError;
+
+          // Update guest status
+          if (guestId) {
+            await supabase
+              .from('photo_selection_guests')
+              .update({ status: 'submitted' })
+              .eq('id', guestId);
+          }
         }
           
         setSelection({ ...selection, status: 'submitted' });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        alert('Selections submitted successfully! The photographer has been notified.');
       } catch (err) {
-        console.error(err);
-        alert('Failed to submit selections.');
+        console.error('Submit error:', err);
+        alert('Failed to submit. Please try again.');
       } finally {
         setSubmitting(false);
       }
@@ -592,12 +685,12 @@ export function SelectionPortal() {
     ? Math.min(100, (uniqueSelectedIds.length / maxPhotosCount) * 100)
     : (uniqueSelectedIds.length > 0 ? 100 : 0);
 
-  if (!guestId || (isFastSelection && !isVerified)) {
+  if (!isPhotographer && (!guestId || (isFastSelection && !isVerified))) {
     return (
       <div className="min-h-screen bg-surface flex items-center justify-center p-8">
         <div className="bg-white p-8 md:p-12 rounded-[2.5rem] silk-shadow border border-outline-variant/5 max-w-md w-full">
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-serif font-bold text-on-surface mb-2">Photo Selection</h1>
+            <h1 className="text-3xl font-serif font-bold text-on-surface mb-2">Fast Selection</h1>
             <p className="text-on-surface-variant">
               {otpSent ? 'Verify your email to access the gallery.' : 'Please enter your details to begin.'}
             </p>
@@ -678,15 +771,39 @@ export function SelectionPortal() {
   const isSubmitted = selection.status === 'submitted' || selection.status === 'completed';
 
   return (
-    <div className="min-h-screen bg-surface pb-40 md:pb-32">
+    <div className="min-h-screen bg-surface pb-40 md:pb-32 secure-portal no-screenshot">
+      <style>{SECURITY_STYLES}</style>
+      
       {/* Fixed Header */}
       <header className="fixed top-0 left-0 right-0 bg-white/80 backdrop-blur-xl z-40 border-b border-outline-variant/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-8 py-3 sm:py-6 flex flex-col sm:flex-row justify-between items-center gap-3 sm:gap-4">
-          <div className="flex-1 sm:flex-none">
-            <h1 className="text-lg sm:text-2xl font-serif font-bold text-on-surface">Photo Selection</h1>
-            <p className="text-xs font-bold uppercase tracking-widest text-primary leading-none">
+          <div className="flex-1 sm:flex-none flex items-center gap-4">
+            {branding?.logo_url ? (
+              <img 
+                src={supabase.storage.from('photographer-assets').getPublicUrl(branding.logo_url).data.publicUrl} 
+                alt={branding.studio_name} 
+                className="h-8 sm:h-12 w-auto object-contain" 
+              />
+            ) : (
+              <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center text-primary font-bold">
+                {branding?.studio_name?.[0] || 'S'}
+              </div>
+            )}
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-lg sm:text-2xl font-serif font-bold text-on-surface">
+                  {branding?.studio_name || 'Fast Selection'}
+                </h1>
+              {selection?.is_secure_mode && (
+                <div className="flex items-center gap-1 px-2 py-0.5 bg-green-50 text-green-700 text-[10px] font-bold uppercase tracking-wider rounded-full border border-green-100">
+                  <ShieldCheck size={10} /> Secure
+                </div>
+              )}
+            </div>
+            <p className="text-xs font-bold uppercase tracking-widest text-primary leading-none mt-1">
               {isSubmitted ? 'Finalized' : `${uniqueSelectedIds.length} / ${maxPhotosCount === 0 ? '∞' : maxPhotosCount}`}
             </p>
+          </div>
           </div>
           
           {/* Mobile Progress Bar */}
@@ -710,27 +827,29 @@ export function SelectionPortal() {
           
           {!isSubmitted && (
             <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 w-full sm:w-auto">
-              {/* AI Search Button */}
-              <div className="relative">
-                <input
-                  type="file"
-                  id="ai-search-input"
-                  className="hidden"
-                  accept="image/*"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handleAIFaceSearch(file);
-                  }}
-                />
-                <button
-                  onClick={() => document.getElementById('ai-search-input')?.click()}
-                  disabled={isAiSearching}
-                  className="px-4 py-2.5 rounded-full font-bold text-sm bg-primary/10 text-primary border border-primary/20 flex items-center gap-2 hover:bg-primary/20 transition-all touch-target"
-                >
-                  {isAiSearching ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-                  Find My Photos
-                </button>
-              </div>
+              {/* AI Search Button - Only for guests */}
+              {!isPhotographer && (
+                <div className="relative">
+                  <input
+                    type="file"
+                    id="ai-search-input"
+                    className="hidden"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleAIFaceSearch(file);
+                    }}
+                  />
+                  <button
+                    onClick={() => document.getElementById('ai-search-input')?.click()}
+                    disabled={isAiSearching}
+                    className="px-4 py-2.5 rounded-full font-bold text-sm bg-primary/10 text-primary border border-primary/20 flex items-center gap-2 hover:bg-primary/20 transition-all touch-target"
+                  >
+                    {isAiSearching ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                    Find My Photos
+                  </button>
+                </div>
+              )}
 
               <button
                 onClick={() => {
@@ -746,6 +865,20 @@ export function SelectionPortal() {
                 <span className="hidden sm:inline">Compare Mode</span>
                 <span className="sm:hidden">Compare</span>
               </button>
+
+              {!isPhotographer && (
+                <button
+                  onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
+                  className={cn(
+                    "px-3 sm:px-4 py-2 sm:py-2.5 rounded-full font-bold text-xs sm:text-sm transition-all flex items-center gap-2 whitespace-nowrap touch-target",
+                    showFavoritesOnly ? "bg-pink-100 text-pink-600 border border-pink-200" : "bg-white border border-outline-variant/20 text-on-surface hover:bg-surface-container-low"
+                  )}
+                >
+                  <Heart size={14} className={cn(showFavoritesOnly && "fill-current")} />
+                  <span className="hidden sm:inline">My Selections</span>
+                  <span className="sm:hidden">Selected</span>
+                </button>
+              )}
 
               <div className="flex-1 hidden sm:block">
                 <div className="w-full h-2 bg-surface-container-low rounded-full overflow-hidden">
@@ -767,32 +900,12 @@ export function SelectionPortal() {
                 👥 Guests ({allGuests.length})
               </button>
               <div className="flex flex-col items-center sm:items-end gap-1">
-                <button
-                  onClick={handleSubmitSelections}
-                  disabled={(maxPhotosCount > 0 && uniqueSelectedIds.length > maxPhotosCount) || uniqueSelectedIds.length === 0 || submitting}
-                  className={cn(
-                    "px-4 sm:px-6 py-2 sm:py-2.5 rounded-full font-bold text-xs sm:text-sm transition-all whitespace-nowrap touch-target w-full sm:w-auto",
-                    (uniqueSelectedIds.length > 0 && (maxPhotosCount === 0 || uniqueSelectedIds.length <= maxPhotosCount))
-                      ? "signature-gradient text-white shadow-lg shadow-primary/20 active:scale-95" 
-                      : "bg-surface-container-low text-on-surface-variant cursor-not-allowed"
-                  )}
-                >
-                  {submitting ? <Loader2 size={16} className="animate-spin" /> : (
-                    <>
-                      <span className="hidden sm:inline">Submit Selections</span>
-                      <span className="sm:hidden">Submit</span>
-                    </>
-                  )}
-                </button>
-                {!isSubmitted && !submitting && (
-                  <p className="text-[10px] font-bold uppercase tracking-tight text-on-surface-variant/60 mr-2">
-                    {maxPhotosCount > 0 && uniqueSelectedIds.length > maxPhotosCount
-                      ? `Remove ${uniqueSelectedIds.length - maxPhotosCount} to submit`
-                      : uniqueSelectedIds.length === 0 
-                        ? "Select photos first"
-                        : "Ready to submit"}
-                  </p>
-                )}
+                {/* Stats badge in header */}
+                <div className="px-4 py-2 bg-primary/5 rounded-full border border-primary/10">
+                   <span className="text-xs font-black text-primary uppercase tracking-widest">
+                     {uniqueSelectedIds.length} / {maxPhotosCount === 0 ? '∞' : maxPhotosCount} Selected
+                   </span>
+                </div>
               </div>
             </div>
           )}
@@ -867,21 +980,111 @@ export function SelectionPortal() {
           </div>
         )}
 
+        <div className="flex flex-col items-center gap-6 mb-8">
+          <div className="inline-flex items-center p-1.5 bg-surface-container-low rounded-2xl border border-outline-variant/10">
+            <button
+              onClick={() => setShowFavoritesOnly(false)}
+              className={cn(
+                "px-6 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center gap-2",
+                !showFavoritesOnly ? "bg-white text-on-surface shadow-sm" : "text-on-surface-variant hover:text-on-surface"
+              )}
+            >
+              <LayoutGrid size={18} />
+              All Photos ({photos.length})
+            </button>
+            <button
+              onClick={() => setShowFavoritesOnly(true)}
+              className={cn(
+                "px-6 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center gap-2",
+                showFavoritesOnly ? "bg-white text-pink-600 shadow-sm" : "text-on-surface-variant hover:text-on-surface"
+              )}
+            >
+              <Heart size={18} className={cn(showFavoritesOnly && "fill-current")} />
+              {isPhotographer ? 'All Guest Picks' : 'My Picks'} ({
+                isPhotographer 
+                  ? new Set(favorites.map(f => f.photo_id)).size 
+                  : favorites.filter(f => f.guest_id === guestId).length
+              })
+            </button>
+          </div>
+
+          {isPhotographer && showFavoritesOnly && (
+            <div className="flex items-center gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
+              <button 
+                onClick={() => {
+                  const allFavoriteIds = new Set(favorites.map(f => f.photo_id));
+                  setComparePhotos(Array.from(allFavoriteIds));
+                }}
+                className="flex items-center gap-2 px-6 py-2 bg-white/5 hover:bg-white/10 rounded-full border border-outline-variant/20 text-xs font-bold transition-all"
+              >
+                <CheckSquare size={16} />
+                Select All Picks
+              </button>
+              <button 
+                onClick={async () => {
+                  const uniquePicks = photos.filter(p => favorites.some(f => f.photo_id === p.id));
+                  if (uniquePicks.length === 0) return;
+                  
+                  // Simplified bulk download call
+                  const zipData = uniquePicks.map(p => ({
+                    filePath: p.file_path,
+                    filename: p.file_path.split('/').pop() || 'photo.jpg'
+                  }));
+                  
+                  try {
+                    const { downloadBulkZip } = await import('../lib/downloadUtils');
+                    await downloadBulkZip(zipData, `${selection?.event?.name || 'selection'}-picks`);
+                  } catch (err) {
+                    console.error('Download failed', err);
+                    alert('Download failed. Please try again.');
+                  }
+                }}
+                className="flex items-center gap-2 px-8 py-2 bg-primary text-white rounded-full text-xs font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-all"
+              >
+                <Download size={16} />
+                Download All Picks
+              </button>
+            </div>
+          )}
+        </div>
+
         {photos.length === 0 ? (
-          <div className="text-center py-20">
-            <p className="text-on-surface-variant text-sm">No photos have been uploaded for selection yet.</p>
+          <div className="text-center py-20 bg-white/50 rounded-[2.5rem] border-2 border-dashed border-outline-variant/20">
+            <p className="text-on-surface-variant font-medium">No photos have been uploaded for review yet.</p>
+          </div>
+        ) : showFavoritesOnly && favorites.filter(f => f.guest_id === guestId).length === 0 ? (
+          <div className="text-center py-20 bg-white/50 rounded-[2.5rem] border-2 border-dashed border-outline-variant/20 max-w-xl mx-auto">
+            <Heart size={48} className="mx-auto mb-4 text-pink-200" />
+            <h3 className="text-xl font-bold text-on-surface mb-2">No favorites yet</h3>
+            <p className="text-on-surface-variant px-8">
+              Go back to "All Photos" and tap the heart icon on any photo you want to include in your album.
+            </p>
+            <button
+              onClick={() => setShowFavoritesOnly(false)}
+              className="mt-6 px-6 py-2.5 bg-primary text-white rounded-full font-bold text-sm hover:scale-105 transition-all"
+            >
+              Browse Photos
+            </button>
           </div>
         ) : (
           <div className="columns-2 sm:columns-3 lg:columns-4 gap-3 sm:gap-4 space-y-3 sm:space-y-4" ref={photoGridRef}>
-            {photos.map((photo) => {
-              const photoFavs = favorites.filter(f => f.photo_id === photo.id);
-              const isFavByMe = photoFavs.some(f => f.guest_id === guestId);
+            {photos
+              .filter(photo => {
+                if (!showFavoritesOnly) return true;
+                if (isPhotographer) return favorites.some(f => f.photo_id === photo.id);
+                return favorites.some(f => f.photo_id === photo.id && f.guest_id === guestId);
+              })
+              .map((photo) => {
+                const photoFavs = favorites.filter(f => f.photo_id === photo.id);
+                const isFavByMe = photoFavs.some(f => f.guest_id === guestId);
               const isFavByOther = photoFavs.length > 0 && !isFavByMe;
               const isSelectedForCompare = comparePhotos.includes(photo.id);
               
               const isLocked = matchedPhotoIds.has(photo.id) && aiResults.indexOf(photo.id) >= aiLimit;
               
-              const imageUrl = supabase.storage.from('photos').getPublicUrl(photo.file_path).data.publicUrl;
+              const displayUrl = photo.thumbnail_url 
+                ? supabase.storage.from('photos').getPublicUrl(photo.thumbnail_url).data.publicUrl
+                : supabase.storage.from('photos').getPublicUrl(photo.file_path).data.publicUrl;
 
               return (
                 <div 
@@ -915,15 +1118,16 @@ export function SelectionPortal() {
                     }
                   }}
                 >
-                  <img
-                    src={imageUrl}
+                  <SecureImage
+                    src={displayUrl}
                     alt="Event Photo"
+                    watermarkText={guestName || guestEmail || selection?.event?.title}
+                    isProtected={selection?.is_secure_mode}
                     className={cn(
                       "w-full h-auto object-cover transition-transform duration-500",
                       !isSubmitted && "group-hover:scale-105",
                       isLocked && "blur-xl grayscale opacity-50"
                     )}
-                    loading="lazy"
                   />
 
                   {isLocked && (
@@ -997,6 +1201,47 @@ export function SelectionPortal() {
           </div>
         )}
       </main>
+
+      {/* Floating Bottom Submit Bar */}
+      {!isSubmitted && guestId && !isPhotographer && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[60] w-[calc(100%-2rem)] max-w-lg">
+          <div className="bg-on-surface/90 backdrop-blur-2xl p-4 rounded-[2.5rem] shadow-2xl border border-white/10 flex items-center justify-between gap-4">
+            <div className="pl-4">
+              <div className="text-[10px] font-black text-white/50 uppercase tracking-[0.2em]">Your Selection</div>
+              <div className="flex items-center gap-2">
+                <span className={cn(
+                  "text-xl font-black",
+                  (maxPhotosCount > 0 && uniqueSelectedIds.length > maxPhotosCount) ? "text-red-400" : "text-white"
+                )}>
+                  {uniqueSelectedIds.length}
+                </span>
+                <span className="text-white/30 font-bold">/</span>
+                <span className="text-white/60 font-bold">{maxPhotosCount === 0 ? '∞' : maxPhotosCount}</span>
+              </div>
+            </div>
+
+            <button
+              onClick={handleSubmitSelections}
+              disabled={uniqueSelectedIds.length === 0 || (maxPhotosCount > 0 && uniqueSelectedIds.length > maxPhotosCount) || submitting}
+              className={cn(
+                "flex-1 h-14 rounded-full font-black text-sm uppercase tracking-widest transition-all flex items-center justify-center gap-3",
+                (uniqueSelectedIds.length > 0 && (maxPhotosCount === 0 || uniqueSelectedIds.length <= maxPhotosCount))
+                  ? "bg-primary text-white hover:scale-105 active:scale-95 shadow-xl shadow-primary/40"
+                  : "bg-white/10 text-white/30 cursor-not-allowed"
+              )}
+            >
+              {submitting ? (
+                <Loader2 className="animate-spin" size={20} />
+              ) : (
+                <>
+                  <CheckCircle2 size={20} />
+                  <span>Submit Selection</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Real-time Activity Feed & Guest Presence (Desktop) */}
       {!isSubmitted && (
@@ -1170,3 +1415,4 @@ export function SelectionPortal() {
     </div>
   );
 }
+

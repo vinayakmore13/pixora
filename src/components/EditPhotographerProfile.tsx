@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabaseClient';
-import { Save, Plus, Trash2, Camera, Upload } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Save, Plus, Trash2, Camera, Upload, Palette, ChevronRight } from 'lucide-react';
+import { useNavigate, Link } from 'react-router-dom';
 
 export function EditPhotographerProfile() {
   const { user } = useAuth();
@@ -131,88 +131,99 @@ export function EditPhotographerProfile() {
 
   // Package management functions
   const addPackage = () => {
+    // Use a more unique temp ID combining timestamp and random string
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     setPackages([...packages, { 
-      id: `temp-${Date.now()}`, 
+      id: tempId, 
       title: '', 
-      price: 0, 
+      price: '', 
       description: '', 
       features: [], 
       is_recommended: false,
       isNew: true
     }]);
   };
-  
+
   const updatePackage = (index: number, field: string, value: any) => {
     const newPackages = [...packages];
     newPackages[index] = { ...newPackages[index], [field]: value };
     setPackages(newPackages);
   };
-  
+
   const savePackage = async (index: number) => {
     const pkg = packages[index];
-    if (!pkg.title || pkg.price <= 0) {
-      setMessage({ text: 'Package title and price are required.', type: 'error' });
+    if (!pkg.title || !pkg.price) {
+      alert('Please fill in at least the title and price.');
       return;
     }
-    
+
     try {
       setSaving(true);
-      
       const pkgData = {
         photographer_id: user?.id,
         title: pkg.title,
-        price: parseInt(pkg.price),
+        price: parseInt(pkg.price.toString().replace(/[^0-9]/g, '')), // Robust price parsing
         description: pkg.description,
         features: typeof pkg.features === 'string' ? pkg.features.split('\n').filter((f: string) => f.trim() !== '') : pkg.features,
         is_recommended: pkg.is_recommended
       };
-      
-      let error;
+
       if (pkg.isNew) {
-        const { error: insertError } = await supabase.from('packages').insert([pkgData]);
-        error = insertError;
+        const { data, error: insertError } = await supabase
+          .from('packages')
+          .insert([pkgData])
+          .select()
+          .single();
+          
+        if (insertError) throw insertError;
+        
+        // Update local state with the returned data from DB (includes the real UUID)
+        const updatedPackages = [...packages];
+        updatedPackages[index] = { ...data, isNew: false };
+        setPackages(updatedPackages);
+        alert('Package created successfully!');
       } else {
-        const { error: updateError } = await supabase.from('packages').update(pkgData).eq('id', pkg.id);
-        error = updateError;
+        const { data, error: updateError } = await supabase
+          .from('packages')
+          .update(pkgData)
+          .eq('id', pkg.id)
+          .select()
+          .single();
+          
+        if (updateError) throw updateError;
+        
+        const updatedPackages = [...packages];
+        updatedPackages[index] = data;
+        setPackages(updatedPackages);
+        alert('Package updated successfully!');
       }
-      
-      if (error) throw error;
-      
-      setMessage({ text: 'Package saved successfully!', type: 'success' });
-      fetchProfileData(); // Reload to get real IDs
     } catch (error: any) {
-      console.error('Error saving package:', error);
-      setMessage({ text: 'Error saving package.', type: 'error' });
+      alert('Error saving package: ' + error.message);
     } finally {
       setSaving(false);
     }
   };
-  
+
   const deletePackage = async (index: number) => {
     const pkg = packages[index];
     if (pkg.isNew) {
-      const newPackages = [...packages];
-      newPackages.splice(index, 1);
-      setPackages(newPackages);
+      setPackages(packages.filter((_, i) => i !== index));
       return;
     }
-    
-    if (window.confirm("Are you sure you want to delete this package?")) {
-      try {
-        setSaving(true);
-        const { error } = await supabase.from('packages').delete().eq('id', pkg.id);
-        if (error) throw error;
-        
-        const newPackages = [...packages];
-        newPackages.splice(index, 1);
-        setPackages(newPackages);
-        setMessage({ text: 'Package deleted.', type: 'success' });
-      } catch (error: any) {
-        console.error('Error deleting package:', error);
-        setMessage({ text: 'Error deleting package.', type: 'error' });
-      } finally {
-        setSaving(false);
-      }
+
+    if (!window.confirm('Are you sure you want to delete this package?')) return;
+
+    try {
+      setSaving(true);
+      const { error } = await supabase.from('packages').delete().eq('id', pkg.id);
+      if (error) throw error;
+      setPackages(packages.filter((_, i) => i !== index));
+      alert('Package deleted successfully!');
+    } catch (error: any) {
+      console.error('Error deleting package:', error);
+      alert('Error deleting package: ' + error.message);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -230,6 +241,20 @@ export function EditPhotographerProfile() {
             {message.text}
           </div>
         )}
+
+        {/* Studio Branding Link */}
+        <Link to="/studio/branding" className="bg-gradient-to-r from-primary/10 to-rose-50 rounded-[2rem] p-6 border border-primary/10 flex items-center justify-between mb-8 group hover:border-primary/30 transition-all">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-primary/15 flex items-center justify-center">
+              <Palette size={24} className="text-primary" />
+            </div>
+            <div>
+              <h3 className="font-bold text-on-surface group-hover:text-primary transition-colors">Studio Branding</h3>
+              <p className="text-sm text-on-surface-variant">Logo, colors, watermark, contact info</p>
+            </div>
+          </div>
+          <ChevronRight size={20} className="text-on-surface-variant group-hover:text-primary transition-colors" />
+        </Link>
 
         {/* Basic Info */}
         <div className="bg-white rounded-3xl p-8 silk-shadow mb-8">

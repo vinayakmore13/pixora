@@ -1,13 +1,10 @@
 import {
   ArrowLeft,
   ArrowRight,
-  Bell,
   Camera,
   Instagram,
   LogOut,
-  Settings,
   Share2,
-  MessageCircle,
   Menu,
 } from "lucide-react";
 import React from "react";
@@ -74,19 +71,7 @@ export function Header() {
           </div>
 
           <div className="flex items-center gap-4">
-            <Link
-              to="/messages"
-              className="text-on-surface-variant hover:text-primary transition-colors relative group"
-            >
-              <MessageCircle size={20} />
-              <span className="absolute -top-1 -right-1 w-2 h-2 bg-primary rounded-full hidden"></span>
-            </Link>
-            <button className="text-on-surface-variant hover:text-primary transition-colors">
-              <Bell size={20} />
-            </button>
-            <button className="text-on-surface-variant hover:text-primary transition-colors">
-              <Settings size={20} />
-            </button>
+
             <div className="relative group">
               <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-primary-fixed cursor-pointer">
                 {profile?.avatar_url ? (
@@ -305,9 +290,9 @@ export function Footer() {
                       location.pathname.startsWith("/photographer/edit");
 
   return (
-    <footer className={cn(
-      "w-full rounded-t-[24px] bg-surface-container-low transition-all duration-300",
-      isDashboard && !isDesktopCollapsed ? "lg:ml-64 lg:w-[calc(100%-16rem)]" : "ml-0 w-full"
+    <footer id="main-footer" className={cn(
+      "bg-white rounded-t-[40px] md:rounded-t-[60px] silk-shadow border-t border-outline-variant/5 pt-20 pb-10 px-8 transition-all duration-300",
+      isDashboard && !isDesktopCollapsed ? "lg:pl-72" : ""
     )}>
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-8 md:gap-12 px-6 md:px-12 py-12 md:py-20 max-w-7xl mx-auto text-sm leading-relaxed">
         <div className="col-span-1 sm:col-span-2 md:col-span-1 space-y-6">

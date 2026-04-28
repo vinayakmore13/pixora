@@ -1,4 +1,4 @@
-import { Briefcase, Calendar, Camera, ChevronRight, Clock, HelpCircle, LayoutGrid, MessageCircle, Plus, Search, Settings, User } from 'lucide-react';
+import { Briefcase, Calendar, Camera, ChevronRight, Clock, HelpCircle, LayoutGrid, MessageCircle, Palette, Plus, Search, Settings, User } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -151,7 +151,7 @@ export function Dashboard() {
           {profile?.user_type === 'photographer' && (
             <>
               <SidebarLink icon={<User size={20} />} label="My Profile" to={`/photographer/${user?.id}`} active={location.pathname.startsWith('/photographer/') && !location.pathname.includes('/edit')} />
-              <SidebarLink icon={<Camera size={20} />} label="Fast Selection" to="/fast-selection" active={location.pathname === '/fast-selection'} />
+              <SidebarLink icon={<Palette size={20} />} label="Studio Branding" to="/studio/branding" active={location.pathname === '/studio/branding'} />
             </>
           )}
           <SidebarLink icon={<HelpCircle size={20} />} label="Help & Support" to="/support" active={location.pathname === '/support'} />
@@ -191,6 +191,8 @@ export function Dashboard() {
           )}
         </header>
 
+        {/* Studio Setup Prompt — only for photographers without branding */}
+        {profile?.user_type === 'photographer' && <StudioSetupBanner userId={user?.id} />}
 
 
         <section className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
@@ -382,5 +384,44 @@ const EventCard: React.FC<EventCardProps> = ({ image, title, date, location, pho
         </div>
       </div>
     </Link>
+  );
+}
+
+function StudioSetupBanner({ userId }: { userId?: string }) {
+  const [show, setShow] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!userId) return;
+    (async () => {
+      const { data } = await supabase
+        .from('photographer_profiles')
+        .select('studio_name')
+        .eq('id', userId)
+        .single();
+      if (!data?.studio_name) setShow(true);
+    })();
+  }, [userId]);
+
+  if (!show) return null;
+
+  return (
+    <div className="mb-8 p-6 bg-gradient-to-r from-primary/10 via-rose-50 to-primary/5 rounded-[2rem] border border-primary/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="flex items-center gap-4">
+        <div className="w-12 h-12 rounded-2xl bg-primary/15 flex items-center justify-center flex-shrink-0">
+          <Palette size={24} className="text-primary" />
+        </div>
+        <div>
+          <h3 className="font-bold text-on-surface">Complete your Studio Branding</h3>
+          <p className="text-sm text-on-surface-variant">Add your logo, brand colors, and watermark to make galleries truly yours.</p>
+        </div>
+      </div>
+      <button
+        onClick={() => navigate('/studio/branding')}
+        className="signature-gradient text-white px-6 py-2.5 rounded-full font-bold text-sm shadow-lg shadow-primary/20 hover:brightness-110 active:scale-95 transition-all whitespace-nowrap"
+      >
+        Set Up Now
+      </button>
+    </div>
   );
 }

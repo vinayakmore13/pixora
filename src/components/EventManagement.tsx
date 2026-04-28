@@ -404,7 +404,7 @@ export function EventManagement() {
 
         {/* Tabs — Clean & Minimal */}
         <div className="relative">
-          <div className="flex gap-8 border-b border-outline-variant/10 mb-8 overflow-x-auto custom-scrollbar [mask-image:linear-gradient(to_right,black_85%,transparent)] md:[mask-image:none]">
+          <div className="flex gap-8 border-b border-outline-variant/10 mb-8 overflow-x-auto no-scrollbar">
             <button
               onClick={() => setActiveTab("overview")}
               className={cn(
@@ -427,7 +427,7 @@ export function EventManagement() {
               )}
             >
               <LayoutGrid size={16} />
-              Photo Selection
+              Fast Selection
             </button>
             <button
               onClick={() => setActiveTab("guests")}
