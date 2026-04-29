@@ -69,7 +69,8 @@ export class CameraSyncService {
             currentCamera: config.type
         };
 
-        this.uploadManager = new UploadManager(eventId, {
+        this.uploadManager = new UploadManager({
+            eventId: eventId,
             maxConcurrent: 2,
             uploaderId: uploaderId,
             isGuestUpload: false,

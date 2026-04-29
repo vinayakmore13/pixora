@@ -37,7 +37,7 @@
   }
 
   /* Mobile touch-friendly targets */
-  @screen sm {
+  @media (min-width: 640px) {
     .touch-target {
       min-height: 44px;
       min-width: 44px;

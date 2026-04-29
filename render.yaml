@@ -3,7 +3,7 @@ services:
   - type: static
     name: pixora-frontend
     env: static
-    buildCommand: npm install && npm run download:models && npm run build
+    buildCommand: npm install && npm run build
     staticPublishPath: ./dist
     routes:
       - type: rewrite

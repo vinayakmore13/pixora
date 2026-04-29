@@ -6,3 +6,16 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+.env/
+.pytest_cache/
+
+# TypeScript
+tsconfig.tsbuildinfo

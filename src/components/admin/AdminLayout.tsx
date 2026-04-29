@@ -55,14 +55,10 @@ export function AdminLayout({ children, title }: AdminLayoutProps) {
 
       {/* Sidebar */}
       <aside className={cn(
-        "w-64 bg-white border-r border-outline-variant/10 flex flex-col fixed inset-y-0 z-40 transition-all duration-300 ease-in-out",
+        "w-64 fixed left-0 top-20 bottom-0 bg-white border-r border-outline-variant/10 p-4 z-40 transition-all duration-300 ease-in-out flex flex-col",
         isSidebarOpen ? "translate-x-0" : "-translate-x-full",
         isDesktopCollapsed ? "lg:-translate-x-full" : "lg:translate-x-0"
       )}>
-        <div className="p-6 border-b border-outline-variant/10">
-          <Link to="/" className="text-2xl font-serif font-bold text-primary tracking-tighter">Pixora</Link>
-          <p className="text-[10px] uppercase tracking-[0.2em] text-primary/60 font-medium mt-1">Partner Portal</p>
-        </div>
 
         <nav className="flex-grow p-4 space-y-2 overflow-y-auto">
           {navItems.map((item) => {
@@ -105,57 +101,15 @@ export function AdminLayout({ children, title }: AdminLayoutProps) {
 
       {/* Main Content */}
       <main className={cn(
-        "flex-grow flex flex-col min-h-screen transition-all duration-300",
+        "flex-1 p-4 md:p-8 pt-24 transition-all duration-300",
         isDesktopCollapsed ? "lg:ml-0" : "lg:ml-64"
       )}>
-        {/* Header */}
-        <header className="h-20 bg-white/80 backdrop-blur-md border-b border-outline-variant/10 sticky top-0 z-40 px-6 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button 
-              onClick={toggleSidebar}
-              className="p-2 -ml-2 text-on-surface-variant hover:text-primary hover:bg-surface-container rounded-full transition-colors"
-              aria-label="Toggle Sidebar"
-            >
-              <Menu size={20} />
-            </button>
-            {location.pathname !== '/partner/dashboard' && (
-              <button 
-                onClick={() => navigate(-1)} 
-                className="p-2 text-on-surface-variant hover:text-primary hover:bg-surface-container rounded-full transition-colors"
-                aria-label="Go back"
-              >
-                <ArrowLeft size={20} />
-              </button>
-            )}
-            <h1 className="text-xl font-bold text-on-surface">{title}</h1>
-          </div>
-
-          <div className="flex items-center gap-6">
-            <div className="relative hidden md:block">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant/50" size={18} />
-              <input
-                type="text"
-                placeholder="Global search..."
-                className="pl-10 pr-4 py-2 bg-surface-container rounded-full text-sm w-64 focus:ring-1 focus:ring-primary outline-none border-none"
-              />
-            </div>
-
-
-
-            <div className="flex items-center gap-3 pl-6 border-l border-outline-variant/10">
-              <div className="text-right hidden sm:block">
-                <p className="text-sm font-semibold text-on-surface">{profile?.full_name}</p>
-                <p className="text-[10px] text-primary font-medium uppercase tracking-wider">Super Admin</p>
-              </div>
-              <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white font-bold">
-                {profile?.full_name?.charAt(0) || 'A'}
-              </div>
-            </div>
-          </div>
+        <header className="mb-8">
+          <h1 className="text-3xl font-serif font-bold text-on-surface">{title}</h1>
         </header>
 
         {/* Page Content */}
-        <div className="p-6 pb-8">
+        <div className="pb-8">
           {children}
         </div>
       </main>

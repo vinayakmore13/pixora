@@ -23,7 +23,12 @@ export function Header() {
   const { user, profile, signOut } = useAuth();
   const isDashboard =
     location.pathname.startsWith("/dashboard") ||
-    location.pathname.startsWith("/event");
+    location.pathname.startsWith("/event") ||
+    location.pathname.startsWith("/partner") ||
+    location.pathname.startsWith("/messages") ||
+    location.pathname.startsWith("/studio") ||
+    location.pathname.startsWith("/upload") ||
+    location.pathname.startsWith("/photographer/edit");
   const isHome = location.pathname === "/";
 
   React.useEffect(() => {
@@ -98,7 +103,7 @@ export function Header() {
                     {user?.email}
                   </p>
                   <p className="text-xs text-primary font-medium mt-1 capitalize">
-                    {profile?.user_type}
+                    {profile?.is_admin ? "Super Admin" : profile?.user_type}
                   </p>
                 </div>
                 <div className="p-2">

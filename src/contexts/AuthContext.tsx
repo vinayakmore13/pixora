@@ -204,8 +204,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
                         if (event === 'SIGNED_OUT') {
                             console.log('[Auth] User signed out');
-                            setProfile(null);
-                            setLoading(false);
+                            // If we're offline, this might be a spurious sign-out due to a failed token refresh.
+                            // We should only truly clear everything if we are online or if it's an explicit action.
+                            if (navigator.onLine) {
+                                setProfile(null);
+                                setLoading(false);
+                            } else {
+                                console.log('[Auth] Browser is offline. Ignoring SIGNED_OUT event to preserve session.');
+                            }
                             return;
                         }
 

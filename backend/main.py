@@ -3,17 +3,28 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.workers.tasks import process_photo_task
 from app.routers.share import router as share_router
 import logging
+from pythonjsonlogger import jsonlogger
 import os
+import redis.asyncio as redis
+from fastapi_limiter import FastAPILimiter
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Setup structured JSON logging
+logger = logging.getLogger()
+logHandler = logging.StreamHandler()
+formatter = jsonlogger.JsonFormatter('%(asctime)s %(levelname)s %(name)s %(message)s')
+logHandler.setFormatter(formatter)
+logger.addHandler(logHandler)
+logger.setLevel(logging.INFO)
 
 app = FastAPI(title="Pixora AI Processing Backend", version="1.0.0")
 
-# Allow all CORS for development MVP
+# Restrict CORS to specific origins from environment, fallback to localhost
+origins_env = os.environ.get("FRONTEND_URL", "http://localhost:5173,http://localhost:3000")
+allow_origins = [origin.strip() for origin in origins_env.split(",")]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allow_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -25,12 +36,19 @@ app.include_router(share_router)
 # so the first API call doesn't wait 2+ minutes
 # ─────────────────────────────────────────────────
 @app.on_event("startup")
-async def preload_ai_model():
-    """Eagerly download and cache the Facenet model on server boot."""
+async def startup_event():
+    """Eagerly download and cache the Facenet model on server boot, and initialize Redis limiter."""
+    try:
+        redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379")
+        redis_connection = redis.from_url(redis_url, encoding="utf-8", decode_responses=True)
+        await FastAPILimiter.init(redis_connection)
+        logger.info("✅ Redis limiter initialized!")
+    except Exception as e:
+        logger.error(f"⚠️ Failed to initialize Redis limiter: {e}")
+
     try:
         from deepface import DeepFace
         logger.info("🔄 Pre-loading DeepFace Facenet model...")
-        # build_model triggers the download + cache
         DeepFace.build_model("Facenet")
         logger.info("✅ DeepFace Facenet model loaded and ready!")
     except Exception as e:

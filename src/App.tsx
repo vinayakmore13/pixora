@@ -170,7 +170,7 @@ function AppLayout() {
 
   return (
     <>
-      {!isAdminRoute && <Header />}
+      <Header />
       <main className="flex-grow">
         <Routes>
           <Route

@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, Header, Depends,
 from typing import Optional, List
 import uuid
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import tempfile
 import os
 from deepface import DeepFace
@@ -10,13 +10,20 @@ from app.supabase_client import supabase
 from app.schemas import ShareLinkCreate, ShareLinkResponse, AccessVerifyRequest, PhotoMatchResponse
 from app.utils import generate_qr_svg
 import logging
+import jwt
+import bcrypt
+import redis.asyncio as redis
 
 router = APIRouter(prefix="/share", tags=["share"])
 logger = logging.getLogger(__name__)
 
-# Mock DB for session tokens (In production, use Redis or a sessions table)
-# session_id -> {token, event_id, expires_at}
-SESSIONS = {}
+JWT_SECRET = os.environ.get("JWT_SECRET", "super-secret-jwt-key")
+JWT_ALGORITHM = "HS256"
+
+async def get_redis():
+    redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379")
+    return redis.from_url(redis_url, encoding="utf-8", decode_responses=True)
+
 
 @router.post("/{event_id}/create-link", response_model=ShareLinkResponse)
 async def create_share_link(event_id: str, data: ShareLinkCreate):
@@ -24,7 +31,8 @@ async def create_share_link(event_id: str, data: ShareLinkCreate):
     Host only: Generate a short-lived share link and QR code.
     """
     token = secrets.token_urlsafe(8)
-    expires_at = datetime.utcnow() + timedelta(days=data.expires_in_days)
+    # Ensure UTC timezone aware datetime
+    expires_at = datetime.now(timezone.utc) + timedelta(days=data.expires_in_days)
     
     # Save to DB
     res = supabase.table("share_links").insert({
@@ -38,7 +46,6 @@ async def create_share_link(event_id: str, data: ShareLinkCreate):
         raise HTTPException(status_code=500, detail="Failed to create share link")
     
     # Generate share URL (frontend base + token)
-    # In production, get base URL from env
     base_url = os.environ.get("FRONTEND_URL", "http://localhost:5173")
     share_url = f"{base_url}/share/{token}"
     
@@ -65,26 +72,53 @@ async def verify_access(token: str, data: AccessVerifyRequest):
     link = res.data[0]
     
     # 2. Check expiry
-    if datetime.fromisoformat(link["expires_at"].replace("Z", "+00:00")) < datetime.now(datetime.timezone.utc).replace(tzinfo=None):
-        raise HTTPException(status_code=410, detail="Link expired")
+    # Note: supabase might return string, parse securely
+    try:
+        expires_at_str = link["expires_at"].replace("Z", "+00:00")
+        if datetime.fromisoformat(expires_at_str) < datetime.now(timezone.utc):
+            raise HTTPException(status_code=410, detail="Link expired")
+    except ValueError:
+        logger.warning("Failed to parse expires_at date")
     
     # 3. Mode-specific check
     if link["mode"] == "password":
-        # In production, check against event share_password_hash
-        # For now, we allow any password if it matches a placeholder or event setting
-        pass 
+        # Check against event upload_password_hash
+        event_res = supabase.table("events").select("upload_password_hash").eq("id", link["event_id"]).execute()
+        if event_res.data and event_res.data[0].get("upload_password_hash"):
+            hashed_pw = event_res.data[0]["upload_password_hash"]
+            provided_pw = (data.password or "").encode('utf-8')
+            
+            # Support both basic SHA256 (legacy) and bcrypt for robust auth
+            is_valid = False
+            try:
+                is_valid = bcrypt.checkpw(provided_pw, hashed_pw.encode('utf-8'))
+            except ValueError:
+                import hashlib
+                if hashlib.sha256(provided_pw).hexdigest() == hashed_pw:
+                    is_valid = True
+            
+            if not is_valid:
+                raise HTTPException(status_code=401, detail="Invalid password")
     elif link["mode"] == "otp":
-        # Placeholder OTP check
+        if not data.email and not data.phone:
+             raise HTTPException(status_code=400, detail="Email or phone required for OTP")
         logger.info(f"OTP verification simulation for {data.email or data.phone}")
-        pass
     
-    # 4. Create session token
-    session_token = secrets.token_hex(16)
-    SESSIONS[session_token] = {
+    # 4. Create stateless JWT session token
+    session_payload = {
         "token": token,
         "event_id": link["event_id"],
-        "expires_at": datetime.utcnow() + timedelta(hours=2)
+        "exp": datetime.utcnow() + timedelta(hours=2)
     }
+    session_token = jwt.encode(session_payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    
+    # Store session in Redis for revocation checks
+    try:
+        r = await get_redis()
+        # Key: session:{token}, Value: event_id. Expiry: 2 hours
+        await r.setex(f"session:{session_token}", 7200, link["event_id"])
+    except Exception as e:
+        logger.warning(f"Failed to store session in Redis: {e}")
     
     # Log access
     supabase.table("access_logs").insert({
@@ -101,14 +135,26 @@ async def match_selfie(token: str, file: UploadFile = File(...), session_token: 
     """
     Extract facial embedding from selfie and search for matches.
     """
-    # 1. Validate session
-    session = SESSIONS.get(session_token)
-    if not session or session["token"] != token:
-        raise HTTPException(status_code=401, detail="Invalid or expired session")
-    
-    if session["expires_at"] < datetime.utcnow():
-        del SESSIONS[session_token]
+    # 1. Validate session statelessly via JWT and check Redis revocation
+    try:
+        session = jwt.decode(session_token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Session expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid session token")
+
+    if session["token"] != token:
+        raise HTTPException(status_code=401, detail="Session does not match link token")
+
+    try:
+        r = await get_redis()
+        # Try testing if redis is actually alive, since exists() might fail silently and return False
+        await r.ping()
+        is_active = await r.exists(f"session:{session_token}")
+        if not is_active:
+            raise HTTPException(status_code=401, detail="Session revoked or expired")
+    except Exception as e:
+        logger.warning(f"Failed to check Redis session revocation (Redis likely offline, skipping): {e}")
 
     event_id = session["event_id"]
     temp_path = None
@@ -121,8 +167,13 @@ async def match_selfie(token: str, file: UploadFile = File(...), session_token: 
             tmp.write(content)
             temp_path = tmp.name
 
-        # 3. Extract embedding
-        logger.info(f"Extracting selfie embedding...")
+        # Extract embedding with constraints
+        logger.info(f"Extracting selfie embedding...", extra={"user_agent": "system"})
+        
+        # Enforce max file size (e.g. 10MB) to prevent memory abuse
+        if os.path.getsize(temp_path) > 10 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="File too large")
+            
         results = DeepFace.represent(
             img_path=temp_path,
             model_name='Facenet',
@@ -189,3 +240,4 @@ async def download_zip(token: str, session_token: str = Header(...)):
     """
     # Logic: Fetch all matches, bundle into ZIP, return as stream
     return {"message": "Bulk download feature coming soon", "status": "placeholder"}
+
