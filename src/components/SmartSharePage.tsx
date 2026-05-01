@@ -44,6 +44,7 @@ export function SmartSharePage() {
   const [sessionToken, setSessionToken] = useState<string | null>(null);
   const [password, setPassword] = useState('');
   const [contact, setContact] = useState('');
+  const [otpCode, setOtpCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [matches, setMatches] = useState<MatchedPhoto[]>([]);
   
@@ -93,7 +94,8 @@ export function SmartSharePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           password: event?.mode === 'password' ? password : null,
-          email: event?.mode === 'otp' ? contact : null 
+          email: event?.mode === 'otp' ? contact : null,
+          otp_code: event?.mode === 'otp' ? otpCode : null,
         }),
       });
 
@@ -147,8 +149,34 @@ export function SmartSharePage() {
   };
 
   const handleDownloadAll = async () => {
-    // Implement bulk download logic or placeholder
-    alert('Preparing your memories! Bulk download will start shortly.');
+    if (!matches.length || !sessionToken) return;
+    
+    try {
+      const response = await fetch(`${BACKEND_URL}/share/${token}/download-zip`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'session-token': sessionToken
+        },
+        body: JSON.stringify(matches.map(m => m.id))
+      });
+
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `wedhub_photos.zip`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+      } else {
+        alert('Failed to generate ZIP. Please try again later.');
+      }
+    } catch (err) {
+      console.error('Download failed:', err);
+      alert('Download failed. Please check your connection.');
+    }
   };
 
   return (
@@ -215,16 +243,29 @@ export function SmartSharePage() {
                     />
                   </div>
                 ) : (
-                  <div className="relative">
-                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant" size={20} />
-                    <input 
-                      type="email"
-                      value={contact}
-                      onChange={(e) => setContact(e.target.value)}
-                      placeholder="Email Address"
-                      className="w-full bg-surface-container-low border border-outline-variant/10 rounded-2xl py-4 pl-12 pr-4 text-on-surface placeholder:text-on-surface-variant/50 focus:ring-1 focus:ring-primary outline-none"
-                    />
-                  </div>
+                  <>
+                    <div className="relative">
+                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant" size={20} />
+                      <input
+                        type="email"
+                        value={contact}
+                        onChange={(e) => setContact(e.target.value)}
+                        placeholder="Email Address"
+                        className="w-full bg-surface-container-low border border-outline-variant/10 rounded-2xl py-4 pl-12 pr-4 text-on-surface placeholder:text-on-surface-variant/50 focus:ring-1 focus:ring-primary outline-none"
+                      />
+                    </div>
+                    <div className="relative">
+                      <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant" size={20} />
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={otpCode}
+                        onChange={(e) => setOtpCode(e.target.value)}
+                        placeholder="OTP Code"
+                        className="w-full bg-surface-container-low border border-outline-variant/10 rounded-2xl py-4 pl-12 pr-4 text-on-surface placeholder:text-on-surface-variant/50 focus:ring-1 focus:ring-primary outline-none"
+                      />
+                    </div>
+                  </>
                 )}
                 
                 {error && <p className="text-red-500 text-xs text-center">{error}</p>}
@@ -272,7 +313,7 @@ export function SmartSharePage() {
                 Scan My Face
               </button>
               
-              <p className="mt-4 text-[10px] text-on-surface-variant uppercase tracking-widest">Powered by Pixora AI</p>
+              <p className="mt-4 text-[10px] text-on-surface-variant uppercase tracking-widest">Powered by Pixvora AI</p>
             </motion.div>
           )}
 
@@ -379,3 +420,4 @@ export function SmartSharePage() {
     </div>
   );
 }
+

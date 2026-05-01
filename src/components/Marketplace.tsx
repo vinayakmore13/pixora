@@ -425,3 +425,4 @@ const PhotographerCard: React.FC<{ id: string, image: string, name: string, loca
     </Link>
   );
 }
+

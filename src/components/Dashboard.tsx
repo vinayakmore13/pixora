@@ -72,19 +72,19 @@ export function Dashboard() {
         return;
       }
 
-      // Fetch events — role-aware query
-      // Photographers see events where they are photographer_id
-      // Clients see events where they are couple_id
-      // Fallback: also check user_id for backwards compatibility with old events
       let query = supabase
         .from('events')
-        .select('*')
+        .select('*', { count: 'exact' })
         .order('created_at', { ascending: false });
 
+      // Fetch events — role-aware query
+      // Photographers see events where they are photographer_id
+      // Clients see events where they are client_id
+      // (events they're invited to as participants)
       if (profile?.user_type === 'photographer') {
         query = query.or(`photographer_id.eq.${user.id},user_id.eq.${user.id}`);
       } else {
-        query = query.or(`couple_id.eq.${user.id},user_id.eq.${user.id}`);
+        query = query.or(`client_id.eq.${user.id},user_id.eq.${user.id}`);
       }
 
       const { data, error: fetchError } = await query;
@@ -195,7 +195,7 @@ export function Dashboard() {
         {profile?.user_type === 'photographer' && <StudioSetupBanner userId={user?.id} />}
 
 
-        <section className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+        <section className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
           <StatCard
             icon={<Calendar className="text-primary" />}
             label="Upcoming Events"
@@ -213,6 +213,11 @@ export function Dashboard() {
             label="Total Photos"
             value={events.reduce((sum, e) => sum + (e.photo_count ?? 0), 0).toString()}
             sub="across all events"
+          />
+          <StorageUsageCard 
+            used={profile?.storage_used || 0} 
+            limit={profile?.storage_limit || 536870912} 
+            plan={profile?.plan_type || 'free'}
           />
         </section>
 
@@ -425,3 +430,49 @@ function StudioSetupBanner({ userId }: { userId?: string }) {
     </div>
   );
 }
+
+function StorageUsageCard({ used, limit, plan }: { used: number, limit: number, plan: string }) {
+  const percentage = Math.min(100, Math.round((used / limit) * 100));
+  const formatSize = (bytes: number) => {
+    const gb = bytes / (1024 * 1024 * 1024);
+    if (gb >= 1) return `${gb.toFixed(1)} GB`;
+    const mb = bytes / (1024 * 1024);
+    return `${mb.toFixed(0)} MB`;
+  };
+
+  return (
+    <div className="bg-white p-6 rounded-[2rem] silk-shadow border border-outline-variant/5">
+      <div className="flex items-center justify-between mb-4">
+        <div className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Storage Usage</div>
+        <div className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-bold uppercase">
+          {plan}
+        </div>
+      </div>
+      
+      <div className="mb-4">
+        <div className="flex justify-between items-end mb-2">
+          <span className="text-2xl font-bold text-on-surface">{formatSize(used)}</span>
+          <span className="text-[10px] text-on-surface-variant">of {formatSize(limit)}</span>
+        </div>
+        <div className="h-2 w-full bg-surface-container-low rounded-full overflow-hidden">
+          <div 
+            className={cn(
+              "h-full transition-all duration-1000 ease-out",
+              percentage > 90 ? "bg-red-500" : percentage > 70 ? "bg-amber-500" : "bg-primary"
+            )}
+            style={{ width: `${percentage}%` }}
+          />
+        </div>
+      </div>
+
+      <Link 
+        to="/pricing" 
+        className="text-[10px] font-bold text-primary hover:underline flex items-center gap-1"
+      >
+        Upgrade Plan <ChevronRight size={10} />
+      </Link>
+    </div>
+  );
+}
+
+

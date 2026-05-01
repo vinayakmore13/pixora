@@ -2,6 +2,7 @@ import { supabase } from './supabaseClient';
 import { compressImage, CompressedImage, getImageDimensions } from './imageCompression';
 import { faceEngine } from './faceEngine';
 import { azureStorageProvider } from './providers/azureStorageProvider';
+import { slugify } from './utils';
 
 
 export interface UploadFile {
@@ -52,6 +53,8 @@ export class UploadManager {
   private isGuestUpload: boolean;
   private isEdited: boolean;
   private skipCompression: boolean;
+  private photographerName?: string;
+  private eventName?: string;
 
   constructor(
     options: {
@@ -65,6 +68,8 @@ export class UploadManager {
       skipCompression?: boolean;
       onProgress?: ProgressCallback;
       onComplete?: CompleteCallback;
+      photographerName?: string;
+      eventName?: string;
     } = {}
   ) {
     this.eventId = options.eventId;
@@ -75,6 +80,8 @@ export class UploadManager {
     this.isGuestUpload = options.isGuestUpload ?? false;
     this.isEdited = options.isEdited ?? false;
     this.skipCompression = options.skipCompression ?? false;
+    this.photographerName = options.photographerName;
+    this.eventName = options.eventName;
     this.onProgress = options.onProgress;
     this.onComplete = options.onComplete;
   }
@@ -305,13 +312,19 @@ export class UploadManager {
   private async uploadToStorage(uploadFile: UploadFile): Promise<string> {
     const file = uploadFile.compressedFile || uploadFile.file;
     const fileExt = file.name.split('.').pop();
+    
+    // Construct hierarchical path: Photographer/Event/Type/Filename
+    const pName = this.photographerName ? slugify(this.photographerName) : 'anonymous';
+    const eName = this.eventName ? slugify(this.eventName) : (this.eventId || 'unknown');
     const folder = this.eventId ? `events/${this.eventId}` : `selections/${this.fastSelectionId}`;
-    const fileName = `${folder}/${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
+    
+    // Final structure: photographer/event/type/folder/timestamp-random.ext
+    const fileName = `${pName}/${eName}/${folder}/${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
 
-    try {
-      await azureStorageProvider.uploadFile(file, fileName, file.type);
-    } catch (uploadError: any) {
-      throw new Error(`Azure Upload failed: ${uploadError.message}`);
+    const result = await azureStorageProvider.uploadFile(file, fileName, 'photos');
+    
+    if (!result.success) {
+      throw new Error(`Azure Upload failed: ${result.error}`);
     }
 
     // Simulate progress for upload (since Supabase doesn't provide progress)
@@ -390,3 +403,4 @@ export class UploadManager {
     };
   }
 }
+

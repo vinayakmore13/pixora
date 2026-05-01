@@ -3,19 +3,56 @@ import * as faceapi from 'face-api.js';
 let modelsLoaded = false;
 let modelLoadError: Error | null = null;
 
+const MODEL_URL = '/models';
+
+const REQUIRED_MODEL_FILES = [
+  'tiny_face_detector_model-weights_manifest.json',
+  'tiny_face_detector_model-shard1',
+  'face_landmark_68_model-weights_manifest.json',
+  'face_landmark_68_model-shard1',
+  'face_recognition_model-weights_manifest.json',
+  'face_recognition_model-shard1',
+  'face_recognition_model-shard2',
+];
+
+const assertModelAssetsAvailable = async () => {
+  const missing: string[] = [];
+
+  await Promise.all(REQUIRED_MODEL_FILES.map(async (file) => {
+    try {
+      const response = await fetch(`${MODEL_URL}/${file}`, {
+        method: 'HEAD',
+        cache: 'no-store',
+      });
+
+      if (!response.ok) {
+        missing.push(file);
+      }
+    } catch {
+      missing.push(file);
+    }
+  }));
+
+  if (missing.length > 0) {
+    throw new Error(
+      `Face recognition models are missing from ${MODEL_URL}: ${missing.join(', ')}. ` +
+      'Run npm run download:models locally and deploy the generated public/models assets.'
+    );
+  }
+};
+
 export const loadModels = async () => {
   if (modelsLoaded) return;
   if (modelLoadError) throw modelLoadError;
   
   try {
-    const MODEL_URL = '/models';
+    await assertModelAssetsAvailable();
     
     // Try to initialize a stable backend before loading anything
     try {
       console.log('[FaceAPI] Initializing TFJS backend...');
       // If we previously failed or if this is a weak device, we might want to default to CPU
       // but let's try to detect if WebGL is broken
-      await faceapi.tf.ready();
       console.log('[FaceAPI] Current backend:', faceapi.tf.getBackend());
     } catch (e) {
       console.warn('[FaceAPI] WebGL init failed, forcing CPU:', e);
@@ -101,7 +138,6 @@ export const extractFaceDescriptor = async (imageElement: HTMLImageElement | HTM
     console.warn('[FaceAPI] Falling back to CPU backend natively...');
     try {
       await faceapi.tf.setBackend('cpu');
-      await faceapi.tf.ready();
       
       const detection = await faceapi.detectSingleFace(imageElement, new faceapi.TinyFaceDetectorOptions())
         .withFaceLandmarks()
@@ -130,3 +166,4 @@ export const extractAllFaces = async (imageElement: HTMLImageElement | HTMLVideo
         box: d.detection.box
     }));
 };
+

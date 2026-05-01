@@ -17,7 +17,7 @@ interface Event {
   event_date: string;
   location: string;
   status: string;
-  couple_id: string;
+  client_id: string;
   created_at: string;
 }
 
@@ -154,9 +154,10 @@ export function AdminEvents() {
           columns={columns}
           data={events}
           loading={loading}
-          searchPlaceholder="Filter events by name, couples or location..."
+          searchPlaceholder="Filter events by name, Users or location..."
         />
       </div>
     </AdminLayout>
   );
 }
+

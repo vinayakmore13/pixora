@@ -284,3 +284,4 @@ export function MarketplaceAnalytics({ isPhotographerView = false }: Marketplace
     </div>
   );
 }
+

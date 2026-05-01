@@ -11,7 +11,7 @@ export function SignUp() {
     fullName: '',
     email: prefillEmail,
     password: '',
-    userType: 'couple' as 'couple' | 'photographer',
+    userType: 'user' as 'user' | 'photographer',
   });
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
@@ -56,14 +56,14 @@ export function SignUp() {
           <img
             className="w-full h-full object-cover opacity-80 mix-blend-multiply transition-transform duration-700 hover:scale-105"
             src="https://lh3.googleusercontent.com/aida-public/AB6AXuCLHpVDLhp1zp2Ig81KbmFuBZMbB6PlwVGhEAcCghapIYPpti-p56piZiP8T57ue4uc0Etu6P2Jwz2b5uQ7P12DZT4wtR6tDsjRo5GpsThBAgLwJr6tR3XZoiLfzCGtdZfcw2n9a81cscrGIBJrkmdLLu-GpmOGIAJv9K6X4VuCLDULJxHlhXL6W0FpoFJSrP6pGyBWZpwHsHQM0rh3STljJ19_7qNcWDmur0LmKSGulT2jG9AKBmTznskNr5ZOeJBz61rQ2GfLTMk"
-            alt="Wedding Couple"
+             alt="User Portrait"
             referrerPolicy="no-referrer"
           />
         </div>
         <div className="relative z-10 flex flex-col justify-between p-12 lg:p-20 text-white w-full h-full bg-gradient-to-t from-black/40 via-transparent to-black/20">
           <div>
             <Link to="/" className="flex items-center gap-2 mb-8">
-              <span className="text-3xl font-serif font-bold tracking-tight">Pixora</span>
+              <span className="text-3xl font-serif font-bold tracking-tight">Pixvora</span>
             </Link>
           </div>
           <div className="max-w-xl">
@@ -83,7 +83,7 @@ export function SignUp() {
       <section className="w-full md:w-1/2 lg:w-2/5 flex items-center justify-center p-6 md:p-12 lg:p-16 bg-white">
         <div className="w-full max-w-[450px]">
           <div className="flex items-center gap-2 mb-10 md:hidden">
-            <span className="text-2xl font-serif font-bold text-primary tracking-tight">Pixora</span>
+            <span className="text-2xl font-serif font-bold text-primary tracking-tight">Pixvora</span>
           </div>
           <div className="mb-10">
             <h2 className="text-3xl font-serif font-bold text-on-surface mb-2">Create your account</h2>
@@ -115,8 +115,8 @@ export function SignUp() {
                 <input
                   type="radio"
                   name="userType"
-                  value="couple"
-                  checked={formData.userType === 'couple'}
+                   value="user"
+                   checked={formData.userType === 'user'}
                   onChange={handleInputChange}
                   className="peer sr-only"
                 />
@@ -259,3 +259,4 @@ function SocialButton({ icon, label }: { icon: string, label: string }) {
     </button>
   );
 }
+

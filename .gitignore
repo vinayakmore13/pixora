@@ -16,6 +16,7 @@ venv/
 env/
 .env/
 .pytest_cache/
+pytest-cache-files-*/
 
 # TypeScript
 tsconfig.tsbuildinfo

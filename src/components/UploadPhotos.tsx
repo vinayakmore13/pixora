@@ -7,10 +7,16 @@ import { UploadFile, UploadManager } from '../lib/uploadManager';
 import { cn } from '../lib/utils';
 
 export function UploadPhotos() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [files, setFiles] = React.useState<UploadFile[]>([]);
   const [events, setEvents] = React.useState<Array<{ id: string; name: string }>>([]);
   const [selectedEventId, setSelectedEventId] = React.useState<string>('');
+  
+  // Find selected event name for organized storage
+  const selectedEventName = React.useMemo(() => 
+    events.find(e => e.id === selectedEventId)?.name || '', 
+  [events, selectedEventId]);
+
   const [selectedAlbum, setSelectedAlbum] = React.useState<string>('Ceremony');
   const [uploadType, setUploadType] = React.useState<'raw' | 'edited'>('raw');
   const [isDragging, setIsDragging] = React.useState(false);
@@ -52,6 +58,8 @@ export function UploadPhotos() {
     if (selectedEventId && user) {
       const manager = new UploadManager({
         eventId: selectedEventId,
+        eventName: selectedEventName,
+        photographerName: profile?.full_name || profile?.studio_name || user.email || 'photographer',
         maxConcurrent: 3,
         uploaderId: user.id,
         isGuestUpload: false,
@@ -450,3 +458,4 @@ function StatusBadge({ status, error }: { status: string, error?: string }) {
     </div>
   );
 }
+

@@ -7,59 +7,60 @@ export function Pricing() {
   const tiers = [
     {
       name: 'Starter',
-      description: 'Perfect for small gatherings and intimate events',
-      price: 'Free',
-      period: 'forever',
+      description: 'Perfect for small events and basic sharing',
+      price: '₹999',
+      period: 'per month',
       cta: 'Get Started',
       highlight: false,
       features: [
-        { text: 'Up to 2 events', included: true },
-        { text: 'Basic photo uploads', included: true },
-        { text: 'QR code sharing', included: true },
-        { text: 'AI photo finder', included: false },
-        { text: 'Marketplace access', included: false },
-        { text: 'Priority support', included: false },
-        { text: 'Advanced analytics', included: false },
-        { text: '10GB storage', included: true },
+        { text: '50GB Storage', included: true },
+        { text: 'QR Gallery & Sharing', included: true },
+        { text: 'Photo Selection Tool', included: true },
+        { text: 'Basic Analytics', included: true },
+        { text: 'AI Photo Finder', included: false },
+        { text: 'Smart Shares included', included: false },
+      ],
+    },
+    {
+      name: 'Growth',
+      description: 'Best for active photographers',
+      price: '₹1999',
+      period: 'per month',
+      cta: 'Go Growth',
+      highlight: true,
+      features: [
+        { text: '150GB Storage', included: true },
+        { text: '10 Smart Shares FREE/mo', included: true },
+        { text: 'Faster AI processing', included: true },
+        { text: 'AI Photo Finder', included: true },
+        { text: 'Client Selection Portal', included: true },
+        { text: 'Priority Support', included: true },
       ],
     },
     {
       name: 'Professional',
-      description: 'For photographers and event organizers',
-      price: '$9.99',
+      description: 'For busy studios and large-scale work',
+      price: '₹2999',
       period: 'per month',
-      cta: 'Start Free Trial',
-      highlight: true,
-      features: [
-        { text: 'Unlimited events', included: true },
-        { text: 'Unlimited photo uploads', included: true },
-        { text: 'QR code sharing', included: true },
-        { text: 'AI photo finder', included: true },
-        { text: 'Marketplace access', included: true },
-        { text: 'Priority support', included: true },
-        { text: 'Advanced analytics', included: false },
-        { text: '100GB storage', included: true },
-      ],
-    },
-    {
-      name: 'Enterprise',
-      description: 'For large-scale operations and studios',
-      price: 'Custom',
-      period: 'contact us',
-      cta: 'Schedule Demo',
+      cta: 'Go Pro',
       highlight: false,
       features: [
-        { text: 'Unlimited everything', included: true },
-        { text: 'Unlimited photo uploads', included: true },
-        { text: 'QR code sharing', included: true },
-        { text: 'AI photo finder', included: true },
-        { text: 'Marketplace access', included: true },
-        { text: 'Priority 24/7 support', included: true },
-        { text: 'Advanced analytics & reporting', included: true },
-        { text: 'Unlimited storage', included: true },
+        { text: '300GB Storage', included: true },
+        { text: 'Unlimited AI Face Search', included: true },
+        { text: 'Priority Processing', included: true },
+        { text: 'Unlimited Smart Shares', included: true },
+        { text: 'Custom Branding', included: true },
+        { text: 'Advanced Business Analytics', included: true },
       ],
     },
   ];
+
+  const packs = [
+    { name: 'Basic Pack', price: '₹149', shares: '5 Shares', bestValue: false },
+    { name: 'Standard Pack', price: '₹299', shares: '15 Shares', bestValue: true },
+    { name: 'Unlimited Pass', price: '₹599', shares: '7 Days Unlimited', bestValue: false },
+  ];
+
 
   return (
     <div className="min-h-screen bg-surface pt-32 pb-20">
@@ -163,7 +164,45 @@ export function Pricing() {
         </div>
       </section>
 
-      {/* FAQ Section */}
+      {/* Smart Share Packs */}
+      <section className="max-w-7xl mx-auto px-8 mb-20">
+        <div className="text-center mb-12">
+          <h2 className="text-3xl font-serif font-bold text-on-surface mb-2">Smart Share Packs</h2>
+          <p className="text-on-surface-variant text-lg">Top up your AI-powered sharing links anytime</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {packs.map((pack) => (
+            <div
+              key={pack.name}
+              className={`p-8 rounded-3xl border transition-all duration-300 hover:scale-[1.02] ${
+                pack.bestValue 
+                  ? 'border-primary bg-primary/5 shadow-xl ring-1 ring-primary/20' 
+                  : 'border-outline-variant/10 bg-white shadow-sm'
+              } text-center relative flex flex-col`}
+            >
+              {pack.bestValue && (
+                <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-white px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg">
+                  Best Value
+                </span>
+              )}
+              <h3 className="text-xl font-bold mb-2 text-on-surface">{pack.name}</h3>
+              <div className="text-4xl font-black text-primary mb-2">{pack.price}</div>
+              <p className="text-on-surface-variant font-medium mb-8">{pack.shares}</p>
+              
+              <button className={`mt-auto w-full py-3 rounded-full font-bold transition-all ${
+                pack.bestValue
+                  ? 'signature-gradient text-white shadow-lg shadow-primary/20'
+                  : 'border-2 border-primary text-primary hover:bg-primary hover:text-white'
+              }`}>
+                Buy Now
+              </button>
+            </div>
+          ))}
+        </div>
+      </section>
+
+       {/* FAQ Section */}
+
       <section className="max-w-3xl mx-auto px-8 mb-20">
         <h2 className="text-3xl font-serif font-bold text-on-surface text-center mb-12">
           Frequently Asked Questions
@@ -216,7 +255,7 @@ export function Pricing() {
             Ready to get started?
           </h2>
           <p className="text-on-surface-variant mb-8 max-w-md mx-auto">
-            Join thousands of photographers and couples already using Pixora to
+            Join thousands of photographers and Users already using Pixvora to
             capture and organize their best moments.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -235,3 +274,4 @@ export function Pricing() {
     </div>
   );
 }
+

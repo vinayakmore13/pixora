@@ -15,7 +15,7 @@ import { supabase } from '../../lib/supabaseClient';
 import { AdminLayout } from './AdminLayout';
 
 interface Stats {
-  total_couples: number;
+  total_users: number;
   total_photographers: number;
   total_events: number;
   events_this_month: number;
@@ -28,14 +28,8 @@ async function fetchAdminStats(): Promise<Stats> {
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
   // Run queries in parallel for speed
-  const [
-    { count: totalCouples },
-    { count: totalPhotographers },
-    { count: totalEvents },
-    { count: eventsThisMonth },
-    { data: revenueData },
-  ] = await Promise.all([
-    supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('user_type', 'couple'),
+  const [totalUsers, totalPhotographers, totalEvents, eventsThisMonth, revenueData] = await Promise.all([
+    supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('user_type', 'user'),
     supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('user_type', 'photographer'),
     supabase.from('events').select('*', { count: 'exact', head: true }),
     supabase.from('events').select('*', { count: 'exact', head: true }).gte('created_at', startOfMonth),
@@ -45,7 +39,7 @@ async function fetchAdminStats(): Promise<Stats> {
   const totalRevenue = (revenueData ?? []).reduce((sum: number, b: any) => sum + (b.total_amount || 0), 0);
 
   return {
-    total_couples: totalCouples ?? 0,
+    total_users: totalUsers ?? 0,
     total_photographers: totalPhotographers ?? 0,
     total_events: totalEvents ?? 0,
     events_this_month: eventsThisMonth ?? 0,
@@ -102,8 +96,8 @@ export function AdminDashboard() {
     },
     {
       label: 'Total Users',
-      value: (stats?.total_couples ?? 0) + (stats?.total_photographers ?? 0),
-      subValue: `${stats?.total_couples ?? 0} couples · ${stats?.total_photographers ?? 0} photographers`,
+      value: (stats?.total_users ?? 0) + (stats?.total_photographers ?? 0),
+      subValue: `${stats?.total_users ?? 0} users · ${stats?.total_photographers ?? 0} photographers`,
       icon: Users,
       color: 'bg-indigo-500',
       trend: 'up',
@@ -219,9 +213,9 @@ export function AdminDashboard() {
             <h3 className="text-lg font-bold text-on-surface mb-6">Quick Stats</h3>
             <div className="space-y-5 flex-grow">
               <div className="flex items-center justify-between pb-4 border-b border-outline-variant/10">
-                <span className="text-sm text-on-surface-variant">Couples registered</span>
+                <span className="text-sm text-on-surface-variant">Users registered</span>
                 <span className="text-sm font-bold text-on-surface">
-                  {loading ? '...' : stats?.total_couples ?? 0}
+                  {loading ? '...' : stats?.total_Users ?? 0}
                 </span>
               </div>
               <div className="flex items-center justify-between pb-4 border-b border-outline-variant/10">
@@ -257,3 +251,4 @@ export function AdminDashboard() {
     </AdminLayout>
   );
 }
+

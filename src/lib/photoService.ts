@@ -209,3 +209,4 @@ export async function getEventDetails(eventId: string) {
         throw error;
     }
 }
+

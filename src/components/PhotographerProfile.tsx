@@ -622,3 +622,4 @@ function SocialLink({ icon, label, value }: { icon: React.ReactNode; label: stri
     </div>
   );
 }
+

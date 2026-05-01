@@ -21,15 +21,10 @@ export default defineConfig(({mode}) => {
       hmr: process.env.DISABLE_HMR !== 'true',
     },
     build: {
+      chunkSizeWarningLimit: 1000,
       rollupOptions: {
         output: {
-          manualChunks(id) {
-            if (id.includes('node_modules')) {
-              if (id.includes('react')) return 'vendor-react';
-              if (id.includes('lucide')) return 'vendor-lucide';
-              return 'vendor';
-            }
-          }
+          // Automatic chunking is more reliable for circular dependency resolution
         }
       }
     },

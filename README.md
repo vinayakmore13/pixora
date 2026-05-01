@@ -1,12 +1,12 @@
-# Pixora - AI Smart Photo Sharing Platform
+# Pixvora - AI Smart Photo Sharing Platform
 
-Pixora is an AI-powered smart photo sharing platform tailored for event photographers and their guests. It uses advanced facial recognition to securely distribute photos, allowing guests to find their moments with a single selfie.
+Pixvora is an AI-powered smart photo sharing platform tailored for event photographers and their guests. It uses advanced facial recognition to securely distribute photos, allowing guests to find their moments with a single selfie.
 
 ## Architecture
 
-Pixora consists of three main pillars:
+Pixvora consists of three main pillars:
 1. **Frontend (React / Vite)**: A premium, dynamic user interface for both the photographer dashboard and the guest selection portal. Uses TailwindCSS, Framer Motion, and Lucide Icons.
-2. **Backend (FastAPI)**: Handles AI processing, secure access verification, and session management using stateless JWT tokens. Uses `DeepFace` for facial feature extraction.
+2. **Backend (FastAPI)**: Handles AI processing, secure access verification, and DB-backed guest sessions. Uses `DeepFace` for facial feature extraction.
 3. **Database & Storage (Supabase)**: Provides PostgreSQL with `pgvector` for scalable facial embedding matching, as well as secure cloud storage for high-resolution and watermarked photos.
 
 ## Getting Started
@@ -47,9 +47,10 @@ Pixora consists of three main pillars:
 4. Set your environment variables:
    ```env
    SUPABASE_URL=your_supabase_url
-   SUPABASE_KEY=your_supabase_service_role_key
+   SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
    JWT_SECRET=your_jwt_secret
    FRONTEND_URL=http://localhost:5173
+   APP_ENV=development
    ```
 5. Run the FastAPI server:
    ```bash
@@ -57,7 +58,7 @@ Pixora consists of three main pillars:
    ```
 
 ## Key Features
-- **Stateless AI Matching**: Instantly finds guests across thousands of event photos using DeepFace and pgvector.
-- **Secure Access Control**: Event portals are protected via JWT-backed sessions, passwords, and OTP verification.
+- **AI Matching**: Instantly finds guests across thousands of event photos using DeepFace and pgvector.
+- **Secure Access Control**: Event portals are protected via password or OTP checks, signed session tokens, and durable `share_sessions` records in Supabase.
 - **Watermarking & Downsampling**: Protects photographer's intellectual property until guests unlock or purchase high-resolution versions.
 - **Photographer Dashboard**: Manage events, photo uploads, pricing bundles, and branding.

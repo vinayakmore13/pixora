@@ -506,3 +506,4 @@ export function ChatRoom() {
     </div>
   );
 }
+

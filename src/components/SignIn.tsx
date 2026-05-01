@@ -118,7 +118,7 @@ export function SignIn() {
     <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-surface">
       <main className="w-full max-w-[400px] flex flex-col items-center">
         <div className="mb-10 text-center">
-          <Link to="/" className="text-3xl font-serif font-bold text-primary tracking-tight">Pixora</Link>
+          <Link to="/" className="text-3xl font-serif font-bold text-primary tracking-tight">Pixvora</Link>
           <h1 className="mt-8 text-2xl font-bold text-on-surface">Welcome back</h1>
           <p className="mt-2 text-on-surface-variant text-sm">Continue your journey to the perfect day.</p>
         </div>
@@ -233,7 +233,7 @@ export function SignIn() {
 
         <footer className="fixed bottom-0 w-full py-8 px-6 text-center border-t border-outline-variant/10 bg-surface/50 backdrop-blur-sm">
           <p className="text-[0.65rem] uppercase tracking-[0.2em] font-bold text-on-surface-variant/60">
-            © 2024 Pixora. The Digital Concierge.
+            © 2024 Pixvora. The Digital Concierge.
           </p>
           <div className="mt-2 flex justify-center gap-6">
             <Link to="/features" className="text-[0.65rem] uppercase tracking-[0.1em] font-semibold text-on-surface-variant hover:text-primary transition-opacity">Privacy Policy</Link>
@@ -245,3 +245,4 @@ export function SignIn() {
     </div>
   );
 }
+

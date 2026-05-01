@@ -24,7 +24,8 @@ import React, { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { supabase } from "../lib/supabaseClient";
-import { cn } from "../lib/utils";
+import { cn, slugify } from "../lib/utils";
+import { azureStorageProvider } from "../lib/providers/azureStorageProvider";
 import { ClientSelections } from "./ClientSelections";
 
 interface Event {
@@ -122,7 +123,7 @@ export function EventManagement() {
           `photographer_id.eq.${user?.id},user_id.eq.${user?.id}`,
         );
       } else {
-        query = query.or(`couple_id.eq.${user?.id},user_id.eq.${user?.id}`);
+        query = query.or(`client_id.eq.${user?.id},user_id.eq.${user?.id}`);
       }
 
       const { data, error: fetchError } = await query.single();
@@ -153,6 +154,49 @@ export function EventManagement() {
 
     try {
       setDeleting(true);
+      console.log(`[STORAGE] Starting deep cleanup for event: ${event.id}`);
+
+      // Step 1: Fetch ALL photo records associated with this event
+      const { data: photos } = await supabase
+        .from('photos')
+        .select('file_path')
+        .eq('event_id', event.id);
+
+      const photoPaths = (photos || []).map(p => p.file_path);
+      console.log(`[STORAGE] Found ${photoPaths.length} photo records to delete`);
+
+      // Step 2: Perform prefix-based folder deletion (New Hierarchy)
+      const pName = slugify(profile?.full_name || profile?.studio_name || user?.email || 'photographer');
+      const eName = slugify(event.name);
+      
+      // Try multiple possible prefixes to be safe
+      const prefixes = [
+        `${pName}/${eName}/events/${event.id}/`, // New Hierarchy
+        `events/${event.id}/`,                  // Legacy Hierarchy
+        `selections/`                           // AI Selections (if applicable)
+      ];
+
+      for (const prefix of prefixes) {
+        console.log(`[STORAGE] Purging prefix: ${prefix}`);
+        await azureStorageProvider.deleteFolder(prefix, 'photos');
+      }
+
+      // Step 3: Individual file deletion fallback (for any non-standard paths)
+      if (photoPaths.length > 0) {
+        const batchSize = 10;
+        for (let i = 0; i < photoPaths.length; i += batchSize) {
+          const batch = photoPaths.slice(i, i + batchSize);
+          await Promise.all(batch.map(async (path) => {
+            try {
+              await azureStorageProvider.deleteFile(path, 'photos');
+            } catch (e) {
+              // Ignore errors for individual files if already deleted by prefix
+            }
+          }));
+        }
+      }
+
+      // Step 4: Delete the event record (Cascades to other DB tables)
       const { error: deleteError } = await supabase
         .from("events")
         .delete()
@@ -160,6 +204,18 @@ export function EventManagement() {
 
       if (deleteError) {
         throw deleteError;
+      }
+
+      // Delete cover image from storage if it exists
+      if (event.cover_image_url) {
+        try {
+          const path = event.cover_image_url.split('/photos/')[1]?.split('?')[0];
+          if (path) {
+            await azureStorageProvider.deleteFile(decodeURIComponent(path), 'photos');
+          }
+        } catch (storageErr) {
+          console.error("Error deleting cover image from storage:", storageErr);
+        }
       }
 
       navigate("/dashboard");
@@ -648,6 +704,7 @@ export function EventManagement() {
    ═══════════════════════════════════════════════════════════════ */
 
 function SmartShareManager({ eventId }: { eventId: string }) {
+  const { profile, refreshProfile } = useAuth();
   const [loading, setLoading] = useState(false);
   const [shareData, setShareData] = useState<{
     share_url: string;
@@ -668,9 +725,14 @@ function SmartShareManager({ eventId }: { eventId: string }) {
         body: JSON.stringify({ mode, expires_in_days: 7 }),
       });
       const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail || "Failed to generate link");
+      }
       setShareData(data);
-    } catch (err) {
+      refreshProfile(); // Update credits in UI
+    } catch (err: any) {
       console.error("Link generation failed:", err);
+      alert(err.message || "An unexpected error occurred");
     } finally {
       setLoading(false);
     }
@@ -697,9 +759,14 @@ function SmartShareManager({ eventId }: { eventId: string }) {
           </div>
         </div>
 
+        <div className="flex items-center justify-between mb-8 p-4 bg-surface-container-low rounded-2xl">
+          <div className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Available Smart Shares</div>
+          <div className="text-xl font-bold text-primary">{profile?.smart_shares_remaining || 0}</div>
+        </div>
+
         <p className="text-sm text-on-surface-variant mb-8 leading-relaxed">
           Enable guests to find their own photos instantly using AI facial recognition. 
-          When they open the link, they'll take a selfie and Pixora will show them 
+          When they open the link, they'll take a selfie and Pixvora will show them 
           only the photos they appear in.
         </p>
 
@@ -734,15 +801,29 @@ function SmartShareManager({ eventId }: { eventId: string }) {
             </div>
           </div>
 
-          <button
-            onClick={generateLink}
-            disabled={loading}
-            className="w-full signature-gradient text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-xl shadow-primary/20 hover:brightness-110 active:scale-95 transition-all disabled:opacity-50"
-          >
-            {loading ? <Loader2 className="animate-spin" size={20} /> : <QrCode size={20} />}
-            Generate Smart Share Link
-          </button>
+          {(profile?.smart_shares_remaining || 0) > 0 ? (
+            <button
+              onClick={generateLink}
+              disabled={loading}
+              className="w-full signature-gradient text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-xl shadow-primary/20 hover:brightness-110 active:scale-95 transition-all disabled:opacity-50"
+            >
+              {loading ? <Loader2 className="animate-spin" size={20} /> : <QrCode size={20} />}
+              Use 1 Smart Share Link
+            </button>
+          ) : (
+            <Link
+              to="/pricing"
+              className="w-full bg-on-surface text-white py-4 rounded-2xl font-bold flex flex-col items-center justify-center gap-1 shadow-xl hover:brightness-110 active:scale-95 transition-all"
+            >
+              <div className="flex items-center gap-2">
+                <Sparkles size={20} className="text-secondary" />
+                <span>Unlock Smart Share Link</span>
+              </div>
+              <span className="text-[10px] opacity-60">Starts at ₹29 per share</span>
+            </Link>
+          )}
         </div>
+
       </div>
 
       <div className="bg-white p-8 rounded-[2.5rem] silk-shadow border border-outline-variant/5 flex items-center justify-center min-h-[300px]">
@@ -830,7 +911,7 @@ function GuestDeliveryManager({ eventId }: { eventId: string }) {
 
   const handleWhatsAppNotify = (guest: any) => {
     const message = encodeURIComponent(
-      `Hi ${guest.full_name}, your photos from the event are ready! \n\nView them here: ${window.location.origin}/e/${eventId}\n\nPowered by Pixora AI.`
+      `Hi ${guest.full_name}, your photos from the event are ready! \n\nView them here: ${window.location.origin}/e/${eventId}\n\nPowered by Pixvora AI.`
     );
     const phone = guest.phone ? guest.phone.replace(/\D/g, '') : '';
     window.open(`https://wa.me/${phone}?text=${message}`, '_blank');
@@ -999,3 +1080,4 @@ function StatusButton({
     </button>
   );
 }
+

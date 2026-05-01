@@ -466,3 +466,4 @@ export function CameraSync({ eventId, eventTitle }: CameraSyncProps) {
     </div>
   );
 }
+

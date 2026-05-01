@@ -17,6 +17,7 @@ interface WatermarkedImageProps {
   onClick?: () => void;
   /** Children rendered on top of the canvas (overlays, badges, etc.) */
   children?: React.ReactNode;
+  onError?: () => void;
 }
 
 /**
@@ -79,6 +80,7 @@ export function WatermarkedImage({
     } catch (err) {
       console.error('[WatermarkedImage] Render failed:', err);
       setLoaded(false);
+      onError?.();
     }
   }, [imageUrl, studioName, logoUrl, config.type, config.position, config.opacity, config.size, config.color]);
 
@@ -97,6 +99,7 @@ export function WatermarkedImage({
           alt={alt}
           className="w-full h-auto object-cover"
           loading="lazy"
+          onError={onError}
         />
         {children}
       </div>
@@ -123,3 +126,4 @@ export function WatermarkedImage({
     </div>
   );
 }
+

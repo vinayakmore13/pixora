@@ -162,3 +162,4 @@ export function getStoredSessionToken(eventId: string): {
 export function removeStoredSessionToken(eventId: string): void {
   localStorage.removeItem(`upload_session_${eventId}`);
 }
+

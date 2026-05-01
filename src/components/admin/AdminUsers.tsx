@@ -14,7 +14,7 @@ interface UserProfile {
   id: string;
   email: string;
   full_name: string;
-  user_type: 'couple' | 'photographer';
+  user_type: 'user' | 'individual' | 'photographer';
   is_admin: boolean;
   avatar_url?: string;
   created_at: string;
@@ -170,3 +170,4 @@ export function AdminUsers() {
     </AdminLayout>
   );
 }
+

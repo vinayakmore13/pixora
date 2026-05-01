@@ -17,6 +17,7 @@ class AccessVerifyRequest(BaseModel):
     password: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
+    otp_code: Optional[str] = None
 
 class PhotoMatchResponse(BaseModel):
     id: str

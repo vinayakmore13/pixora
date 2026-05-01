@@ -1,63 +1,79 @@
-from fastapi import FastAPI, BackgroundTasks, Request, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from app.workers.tasks import process_photo_task
-from app.routers.share import router as share_router
 import logging
-from pythonjsonlogger import jsonlogger
 import os
-import redis.asyncio as redis
-from fastapi_limiter import FastAPILimiter
+from dotenv import load_dotenv
 
-# Setup structured JSON logging
+from pathlib import Path
+
+# Load env vars from root directory relative to this file
+env_path = Path(__file__).resolve().parent.parent / ".env"
+load_dotenv(env_path)
+
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from pythonjsonlogger import jsonlogger
+
+from app.routers.share import router as share_router
+from app.workers.tasks import process_photo_task
+
+
 logger = logging.getLogger()
-logHandler = logging.StreamHandler()
-formatter = jsonlogger.JsonFormatter('%(asctime)s %(levelname)s %(name)s %(message)s')
-logHandler.setFormatter(formatter)
-logger.addHandler(logHandler)
+log_handler = logging.StreamHandler()
+formatter = jsonlogger.JsonFormatter("%(asctime)s %(levelname)s %(name)s %(message)s")
+log_handler.setFormatter(formatter)
+logger.addHandler(log_handler)
 logger.setLevel(logging.INFO)
 
-app = FastAPI(title="Pixora AI Processing Backend", version="1.0.0")
+app = FastAPI(title="Pixvora AI Processing Backend", version="1.0.0")
 
-# Restrict CORS to specific origins from environment, fallback to localhost
-origins_env = os.environ.get("FRONTEND_URL", "http://localhost:5173,http://localhost:3000")
-allow_origins = [origin.strip() for origin in origins_env.split(",")]
+# Dynamic CORS setup
+environment = os.environ.get("APP_ENV", "production").lower()
+is_dev = environment in {"dev", "development", "local"}
+
+origins_env = os.environ.get("ALLOWED_ORIGINS") or os.environ.get("FRONTEND_URL")
+if not origins_env and is_dev:
+    origins_env = "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:3000"
+
+if not origins_env:
+    # In production, we MUST have origins defined
+    if not is_dev:
+        raise RuntimeError("Set FRONTEND_URL or ALLOWED_ORIGINS before starting the backend in production.")
+    else:
+        allow_origins = ["*"] # Absolute fallback for dev
+else:
+    allow_origins = [origin.strip() for origin in origins_env.split(",") if origin.strip()]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allow_origins,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 app.include_router(share_router)
 
-# ─────────────────────────────────────────────────
-# Pre-load the DeepFace AI model on startup
-# so the first API call doesn't wait 2+ minutes
-# ─────────────────────────────────────────────────
+
 @app.on_event("startup")
 async def startup_event():
-    """Eagerly download and cache the Facenet model on server boot, and initialize Redis limiter."""
-    try:
-        redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379")
-        redis_connection = redis.from_url(redis_url, encoding="utf-8", decode_responses=True)
-        await FastAPILimiter.init(redis_connection)
-        logger.info("✅ Redis limiter initialized!")
-    except Exception as e:
-        logger.error(f"⚠️ Failed to initialize Redis limiter: {e}")
+    """Eagerly cache the Facenet model on server boot unless skipped."""
+    if os.environ.get("SKIP_AI_PRELOAD") == "true":
+        logger.info("SKIP_AI_PRELOAD is set. Skipping DeepFace initialization.")
+        return
 
+    print("Initializing AI Backend (this may take up to 2 minutes)...")
     try:
         from deepface import DeepFace
-        logger.info("🔄 Pre-loading DeepFace Facenet model...")
+        logger.info("Pre-loading DeepFace Facenet model...")
         DeepFace.build_model("Facenet")
-        logger.info("✅ DeepFace Facenet model loaded and ready!")
+        logger.info("DeepFace model loaded.")
     except Exception as e:
-        logger.error(f"⚠️ Failed to pre-load DeepFace model: {e}")
-        logger.error("   The model will be downloaded on the first API call instead.")
+        logger.error("Failed to pre-load DeepFace model: %s", e)
+
 
 @app.get("/")
 def read_root():
-    return {"status": "Pixora AI Backend is running"}
+    return {"status": "Pixvora AI Backend is running"}
+
 
 @app.get("/health")
 def health_check():
@@ -65,14 +81,13 @@ def health_check():
     return {
         "status": "healthy",
         "ai_provider": "LOCAL (DeepFace/Facenet)",
-        "version": "1.0.0"
+        "version": "1.0.0",
     }
+
 
 @app.post("/webhooks/photos/pending")
 async def handle_new_photo(request: Request, background_tasks: BackgroundTasks):
-    """
-    Webhook endpoint to receive 'INSERT' triggers from Supabase Postgres.
-    """
+    """Receive Supabase photo insert webhooks and queue processing."""
     try:
         payload = await request.json()
         record = payload.get("record")
@@ -82,22 +97,18 @@ async def handle_new_photo(request: Request, background_tasks: BackgroundTasks):
         photo_id = record.get("id")
         file_path = record.get("file_path")
         event_id = record.get("event_id")
-        
-        logger.info(f"Received webhook for photo {photo_id}. Queuing task...")
-        
-        # Determine if Celery is connected, else use built-in BackgroundTasks
-        # For simplicity without Redis running immediately, we use FastAPI background tasks:
-        # process_photo_task.delay(photo_id, event_id, file_path) -> For Celery
-        
-        # Unwrapped call since BackgroundTasks doesn't pass 'self'
-        from app.workers.tasks import process_photo_task
+
+        logger.info("Received webhook for photo %s. Queuing task...", photo_id)
         background_tasks.add_task(process_photo_task, photo_id, event_id, file_path)
 
-
-
         return {"success": True, "status": "Task enqueued", "photo_id": photo_id}
-    
-    except Exception as e:
-        logger.error(f"Error enqueuing webhook: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
 
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Error enqueuing webhook: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("main:app", host="127.0.0.1", port=port, reload=True)

@@ -41,7 +41,7 @@ export function ForgotPassword() {
       <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-surface">
         <main className="w-full max-w-[400px] flex flex-col items-center">
           <div className="mb-10 text-center">
-            <Link to="/" className="text-3xl font-serif font-bold text-primary tracking-tight">Pixora</Link>
+            <Link to="/" className="text-3xl font-serif font-bold text-primary tracking-tight">Pixvora</Link>
             <h1 className="mt-8 text-2xl font-bold text-on-surface">Check your email</h1>
           </div>
 
@@ -86,7 +86,7 @@ export function ForgotPassword() {
 
           <footer className="fixed bottom-0 w-full py-8 px-6 text-center border-t border-outline-variant/10 bg-surface/50 backdrop-blur-sm">
             <p className="text-[0.65rem] uppercase tracking-[0.2em] font-bold text-on-surface-variant/60">
-              © 2024 Pixora. The Digital Concierge.
+              © 2024 Pixvora. The Digital Concierge.
             </p>
           </footer>
         </main>
@@ -98,7 +98,7 @@ export function ForgotPassword() {
     <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-surface">
       <main className="w-full max-w-[400px] flex flex-col items-center">
         <div className="mb-10 text-center">
-          <Link to="/" className="text-3xl font-serif font-bold text-primary tracking-tight">Pixora</Link>
+          <Link to="/" className="text-3xl font-serif font-bold text-primary tracking-tight">Pixvora</Link>
           <h1 className="mt-8 text-2xl font-bold text-on-surface">Reset your password</h1>
           <p className="mt-2 text-on-surface-variant text-sm">Enter your email and we'll send you a reset link.</p>
         </div>
@@ -146,10 +146,11 @@ export function ForgotPassword() {
 
         <footer className="fixed bottom-0 w-full py-8 px-6 text-center border-t border-outline-variant/10 bg-surface/50 backdrop-blur-sm">
           <p className="text-[0.65rem] uppercase tracking-[0.2em] font-bold text-on-surface-variant/60">
-            © 2024 Pixora. The Digital Concierge.
+            © 2024 Pixvora. The Digital Concierge.
           </p>
         </footer>
       </main>
     </div>
   );
 }
+

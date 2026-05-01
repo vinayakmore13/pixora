@@ -12,6 +12,7 @@ import { faceEngine } from '../lib/faceEngine';
 import { usePhotographerBranding } from '../hooks/usePhotographerBranding';
 import { SecureImage } from './SecureImage';
 import { logSecurityEvent, getDeviceFingerprint } from '../lib/securityEngine';
+import { azureStorageProvider } from '../lib/providers/azureStorageProvider';
 
 interface Photo {
   id: string;
@@ -780,7 +781,7 @@ export function SelectionPortal() {
           <div className="flex-1 sm:flex-none flex items-center gap-4">
             {branding?.logo_url ? (
               <img 
-                src={supabase.storage.from('photographer-assets').getPublicUrl(branding.logo_url).data.publicUrl} 
+                src={azureStorageProvider.getBlobUrl(branding.logo_url, 'photographer-assets')} 
                 alt={branding.studio_name} 
                 className="h-8 sm:h-12 w-auto object-contain" 
               />
@@ -1083,8 +1084,8 @@ export function SelectionPortal() {
               const isLocked = matchedPhotoIds.has(photo.id) && aiResults.indexOf(photo.id) >= aiLimit;
               
               const displayUrl = photo.thumbnail_url 
-                ? supabase.storage.from('photos').getPublicUrl(photo.thumbnail_url).data.publicUrl
-                : supabase.storage.from('photos').getPublicUrl(photo.file_path).data.publicUrl;
+                ? azureStorageProvider.getBlobUrl(photo.thumbnail_url, 'photos')
+                : azureStorageProvider.getBlobUrl(photo.file_path, 'photos');
 
               return (
                 <div 
@@ -1330,7 +1331,7 @@ export function SelectionPortal() {
               if (!photo) return null;
               
               const isFav = favorites.some(f => f.photo_id === photo.id && f.guest_id === guestId);
-              const imageUrl = supabase.storage.from('photos').getPublicUrl(photo.file_path).data.publicUrl;
+              const imageUrl = azureStorageProvider.getBlobUrl(photo.file_path, 'photos');
               
               return (
                 <div key={photoId} className="relative flex flex-col items-center justify-center bg-gray-900 rounded-lg sm:rounded-2xl overflow-hidden group">
@@ -1415,4 +1416,5 @@ export function SelectionPortal() {
     </div>
   );
 }
+
 

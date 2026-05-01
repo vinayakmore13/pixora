@@ -18,6 +18,7 @@ import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { supabase } from "../lib/supabaseClient";
 import { cn } from "../lib/utils";
+import { azureStorageProvider } from "../lib/providers/azureStorageProvider";
 
 // Generate a random QR code string (8 characters)
 function generateQRCode(): string {
@@ -174,33 +175,12 @@ export function CreateEvent() {
           const fileName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExt}`;
           const filePath = `${user.id}/${fileName}`;
 
-          const { error: uploadError } = await supabase.storage
-            .from("event-covers")
-            .upload(filePath, coverImageFile, {
-              cacheControl: "3600",
-              upsert: false,
-            });
+          const result = await azureStorageProvider.uploadFile(coverImageFile, filePath, 'photos');
 
-          if (uploadError) {
-            // Better error messages
-            if (uploadError.message.includes("Bucket not found")) {
-              console.error("Storage bucket not configured");
-              setCoverImageError(
-                "Image upload unavailable. Continuing without cover image.",
-              );
-              // Continue without cover image
-            } else if (uploadError.message.includes("Duplicate")) {
-              throw new Error("File already exists. Please try again.");
-            } else {
-              throw uploadError;
-            }
+          if (!result.success) {
+            throw new Error(result.error || "Failed to upload cover image");
           } else {
-            // Get public URL
-            const {
-              data: { publicUrl },
-            } = supabase.storage.from("event-covers").getPublicUrl(filePath);
-
-            finalCoverImageUrl = publicUrl;
+            finalCoverImageUrl = azureStorageProvider.getBlobUrl(filePath, 'photos');
           }
         } catch (uploadErr: any) {
           console.error("Cover upload error:", uploadErr);
@@ -219,16 +199,16 @@ export function CreateEvent() {
 
       const photographerId =
         profile?.user_type === "photographer" ? user.id : null;
-      const coupleId = sourceClientId || null;
+       const clientId = sourceClientId || null;
 
       // Step 1: Insert core event fields
       // (boolean settings are sent in a separate update to avoid PostgREST schema cache issues)
       const { data, error: insertError } = await supabase
         .from("events")
         .insert({
-          user_id: user.id, // Keep for backwards compatibility
+          user_id: user.id,
           photographer_id: photographerId,
-          couple_id: coupleId,
+          client_id: clientId,
           name: formData.name.trim(),
           description: formData.description.trim() || null,
           event_date: formData.event_date
@@ -854,3 +834,4 @@ export function CreateEvent() {
     </div>
   );
 }
+

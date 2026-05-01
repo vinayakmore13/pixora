@@ -146,13 +146,12 @@ export function FeaturesPage() {
         {/* AI Photo Finder Detail */}
         <div className="mb-16 bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl border border-purple-200 p-12">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
-            <div className="bg-white rounded-xl p-8 h-64 flex items-center justify-center border border-purple-200 order-first md:order-last">
-              <div className="text-center">
-                <Lightbulb className="w-16 h-16 mx-auto text-purple-500 mb-4" />
-                <p className="text-sm text-on-surface-variant">
-                  Smart Recognition
-                </p>
-              </div>
+            <div className="bg-white rounded-xl overflow-hidden h-64 flex items-center justify-center border border-purple-200 order-first md:order-last">
+              <img 
+                src="/male-face-closeup.png" 
+                alt="Smart Recognition" 
+                className="w-full h-full object-cover"
+              />
             </div>
             <div className="order-last md:order-first">
               <h3 className="text-3xl font-bold text-on-surface mb-4">
@@ -230,3 +229,4 @@ export function FeaturesPage() {
     </div>
   );
 }
+

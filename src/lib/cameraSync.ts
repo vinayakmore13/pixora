@@ -510,3 +510,4 @@ export async function loadCameraSyncSettings(
 
     return data.camera_sync_config as CameraConfig;
 }
+

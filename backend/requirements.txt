@@ -13,6 +13,7 @@ fastapi-limiter==0.1.5
 python-json-logger>=2.0.7
 pytest>=8.0.0
 pytest-asyncio>=0.23.5
+pytest-mock>=3.12.0
 passlib>=1.7.4
 bcrypt>=4.1.2
 deepface>=0.0.92

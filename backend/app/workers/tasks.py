@@ -7,8 +7,9 @@ from dotenv import load_dotenv
 from deepface import DeepFace
 from app.supabase_client import supabase
 
-# Load env vars
+# Load env vars from backend or root
 load_dotenv()
+load_dotenv(os.path.join(os.getcwd(), '..', '.env'))
 
 # Initialize Celery explicitly pointing to Redis
 celery_app = Celery(

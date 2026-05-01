@@ -74,7 +74,7 @@ export function PartnerLogin() {
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
           <Link to="/" className="inline-flex items-center gap-2 mb-8">
-            <span className="text-2xl font-bold tracking-tighter text-on-surface">Pixora</span>
+            <span className="text-2xl font-bold tracking-tighter text-on-surface">Pixvora</span>
           </Link>
           <h2 className="text-3xl font-serif font-bold text-on-surface">Partner Portal</h2>
           <p className="mt-2 text-on-surface-variant">Sign in to manage the platform</p>
@@ -99,7 +99,7 @@ export function PartnerLogin() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full pl-12 pr-4 py-4 bg-surface-container-low rounded-2xl outline-none focus:ring-1 focus:ring-primary transition-all text-on-surface disabled:opacity-60"
-                  placeholder="admin@pixora.com"
+                  placeholder="admin@pixvora.com"
                   disabled={loading}
                 />
               </div>
@@ -148,3 +148,4 @@ export function PartnerLogin() {
     </div>
   );
 }
+

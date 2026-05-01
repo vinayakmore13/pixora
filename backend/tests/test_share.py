@@ -1,7 +1,15 @@
+import os
+from unittest.mock import Mock
+
 import pytest
 from httpx import AsyncClient, ASGITransport
+
+os.environ.setdefault("APP_ENV", "development")
+os.environ.setdefault("SUPABASE_URL", "https://example.supabase.co")
+os.environ.setdefault("SUPABASE_SERVICE_ROLE_KEY", "test-service-role")
+os.environ.setdefault("JWT_SECRET", "test-secret")
+
 from main import app
-import os
 
 # Minimal smoke test
 @pytest.mark.asyncio
@@ -12,12 +20,19 @@ async def test_health_check():
     assert response.json()["status"] == "healthy"
 
 @pytest.mark.asyncio
-async def test_verify_access_invalid_token():
+async def test_verify_access_invalid_token(monkeypatch):
+    # Mock Supabase response for non-existent token
+    import app.routers.share as share_router
+
+    mock_supabase = Mock()
+    mock_supabase.table.return_value.select.return_value.eq.return_value.execute.return_value.data = []
+    monkeypatch.setattr(share_router, "supabase", mock_supabase)
+    
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         response = await ac.post("/share/invalid_token/verify", json={"password": "wrong"})
     
-    # Should be 404 since the link doesn't exist, or 429 if rate limited, or 500 if supabase is mocked poorly.
-    # Without a mocked supabase, it might fail to connect. We assert it's not a 200.
-    assert response.status_code in [404, 500]
+    # Now it should be a clean 404
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Link not found"
 
 # Add more integration tests here using pytest-mock for Supabase

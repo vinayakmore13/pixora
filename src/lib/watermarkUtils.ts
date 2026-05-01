@@ -179,3 +179,4 @@ export function loadImage(url: string): Promise<HTMLImageElement> {
     img.src = url;
   });
 }
+

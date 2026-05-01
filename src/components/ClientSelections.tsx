@@ -10,6 +10,8 @@ import {
 import { cn } from '../lib/utils';
 import { UploadManager, UploadFile } from '../lib/uploadManager';
 import { useAuth } from '../contexts/AuthContext';
+import { azureStorageProvider } from '../lib/providers/azureStorageProvider';
+import { deletePhoto } from '../lib/photoMetadata';
 
 interface ClientSelectionsProps {
   eventId: string;
@@ -32,6 +34,7 @@ export function ClientSelections({ eventId }: ClientSelectionsProps) {
   const [copied, setCopied] = useState(false);
   const [stats, setStats] = useState({ totalFavorites: 0, uniquePhotos: 0 });
   const [columnError, setColumnError] = useState(false);
+  const [brokenPhotoIds, setBrokenPhotoIds] = useState<Set<string>>(new Set());
 
   // Form State
   const [maxPhotos, setMaxPhotos] = useState(50);
@@ -81,7 +84,7 @@ export function ClientSelections({ eventId }: ClientSelectionsProps) {
   const getPhotoUrl = (path: string) => {
     if (!path) return '';
     if (path.startsWith('http')) return path;
-    return supabase.storage.from('photos').getPublicUrl(path).data.publicUrl;
+    return azureStorageProvider.getBlobUrl(path, 'photos');
   };
 
   const fetchEventPhotos = async () => {
@@ -177,17 +180,33 @@ export function ClientSelections({ eventId }: ClientSelectionsProps) {
     setSelectedForBulk(newSet);
   };
 
-  const deletePhoto = async (photoId: string) => {
-    if (!confirm('Are you sure you want to delete this photo forever?')) return;
+  const handleImageError = async (photoId: string) => {
+    // Only auto-delete for photographers to avoid accidental deletions by guests
+    // and to ensure we have permissions
+    setEventPhotos(prev => prev.filter(p => p.id !== photoId));
     
     try {
-      const { error } = await supabase
-        .from('photos')
-        .delete()
-        .eq('id', photoId);
+      // Silently delete in the background
+      await deletePhoto(photoId);
+    } catch (err) {
+      console.error(`[CLEANUP] Failed to remove broken photo: ${photoId}`, err);
+    }
+  };
+    
+  const handleDeletePhoto = async (photoId: string) => {
+    if (!confirm('Are you sure you want to delete this photo forever? This will remove it from all storage and the database.')) return;
+    
+    try {
+      const result = await deletePhoto(photoId);
         
-      if (error) throw error;
+      if (!result || !result.success) throw new Error(result?.error || 'Failed to delete photo');
+
       setEventPhotos(prev => prev.filter(p => p.id !== photoId));
+      setBrokenPhotoIds(prev => {
+        const next = new Set(prev);
+        next.delete(photoId);
+        return next;
+      });
       if (selectedForDetail?.id === photoId) setSelectedForDetail(null);
     } catch (err) {
       console.error('Delete error:', err);
@@ -350,6 +369,7 @@ export function ClientSelections({ eventId }: ClientSelectionsProps) {
               {isUploading ? <Loader2 size={18} className="animate-spin" /> : <Upload size={18} />}
               Upload Photos for Client
             </button>
+            
             <input ref={fileInputRef} type="file" multiple accept="image/*" className="hidden" onChange={handleFileUpload} />
           </div>
         </div>
@@ -369,10 +389,6 @@ export function ClientSelections({ eventId }: ClientSelectionsProps) {
 
         <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4 p-4 border border-outline-variant/10 rounded-[2.5rem] bg-surface-container-lowest shadow-inner relative group/grid">
           {eventPhotos.slice(0, 15).map(photo => {
-            const displayUrl = photo.thumbnail_url 
-              ? supabase.storage.from('photos').getPublicUrl(photo.thumbnail_url).data.publicUrl
-              : supabase.storage.from('photos').getPublicUrl(photo.file_path).data.publicUrl;
-
             return (
               <div
                 key={photo.id}
@@ -384,9 +400,10 @@ export function ClientSelections({ eventId }: ClientSelectionsProps) {
                 )}
               >
                 <img 
-                  src={displayUrl} 
+                  src={getPhotoUrl(photo.thumbnail_url || photo.file_path)} 
                   alt="" 
                   className="w-full h-full object-cover"
+                  onError={() => handleImageError(photo.id)}
                 />
                 {photo.is_in_selection_pool && (
                   <div className="absolute top-2 right-2 bg-primary text-white rounded-full p-1 shadow-lg">
@@ -492,10 +509,6 @@ export function ClientSelections({ eventId }: ClientSelectionsProps) {
           <main className="p-8 max-w-[1600px] mx-auto">
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
               {eventPhotos.map(photo => {
-                const displayUrl = photo.thumbnail_url 
-                  ? supabase.storage.from('photos').getPublicUrl(photo.thumbnail_url).data.publicUrl
-                  : supabase.storage.from('photos').getPublicUrl(photo.file_path).data.publicUrl;
-
                 return (
                   <div 
                     key={photo.id}
@@ -508,9 +521,10 @@ export function ClientSelections({ eventId }: ClientSelectionsProps) {
                     onClick={() => isBulkMode ? toggleBulkSelect(photo.id) : setSelectedForDetail(photo)}
                   >
                     <img 
-                      src={displayUrl} 
+                      src={getPhotoUrl(photo.thumbnail_url || photo.file_path)} 
                       alt="" 
                       className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                      onError={() => handleImageError(photo.id)}
                     />
                     
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity p-6 flex flex-col justify-end">
@@ -525,7 +539,7 @@ export function ClientSelections({ eventId }: ClientSelectionsProps) {
                           {photo.is_in_selection_pool ? 'In Portal' : 'Add to Portal'}
                         </button>
                         <button
-                          onClick={(e) => { e.stopPropagation(); deletePhoto(photo.id); }}
+                          onClick={(e) => { e.stopPropagation(); handleDeletePhoto(photo.id); }}
                           className="w-10 h-10 bg-red-500 text-white rounded-full flex items-center justify-center hover:scale-110 transition-transform shadow-lg"
                         >
                           <Trash2 size={18} />
@@ -557,7 +571,7 @@ export function ClientSelections({ eventId }: ClientSelectionsProps) {
               <div className="max-w-6xl w-full flex flex-col md:flex-row gap-12 items-center">
                 <div className="flex-1 relative rounded-[3rem] overflow-hidden shadow-2xl border border-white/10">
                   <img 
-                    src={supabase.storage.from('photos').getPublicUrl(selectedForDetail.file_path).data.publicUrl} 
+                    src={getPhotoUrl(selectedForDetail.file_path)} 
                     alt="" 
                     className="w-full h-auto max-h-[80vh] object-contain"
                   />
@@ -584,7 +598,7 @@ export function ClientSelections({ eventId }: ClientSelectionsProps) {
                     </button>
 
                     <button
-                      onClick={() => deletePhoto(selectedForDetail.id)}
+                      onClick={() => handleDeletePhoto(selectedForDetail.id)}
                       className="w-full py-6 bg-red-500/10 text-red-500 border-2 border-red-500/20 rounded-3xl font-black uppercase tracking-[0.2em] text-sm hover:bg-red-500 hover:text-white transition-all flex items-center justify-center gap-3"
                     >
                       <Trash2 size={20} />
@@ -814,3 +828,4 @@ export function ClientSelections({ eventId }: ClientSelectionsProps) {
     </div>
   );
 }
+

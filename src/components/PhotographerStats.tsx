@@ -81,7 +81,7 @@ export function PhotographerStats({
 
   const mockTopImages = topImages.length > 0 ? topImages : [
     { id: '1', title: 'Bride Portrait', views: 450, likes: 120, inquiries: 8 },
-    { id: '2', title: 'Wedding Couple', views: 380, likes: 98, inquiries: 6 },
+     { id: '2', title: 'User Portrait', views: 380, likes: 98, inquiries: 6 },
     { id: '3', title: 'Reception Moment', views: 320, likes: 85, inquiries: 5 },
   ];
 
@@ -299,7 +299,7 @@ export function PhotographerStats({
             </li>
             <li className="flex items-start gap-3">
               <span className="text-purple-600 font-bold mt-1">✚</span>
-              <span>Add event/couple testimonials - profiles with reviews convert 3x better!</span>
+              <span>Add event/user testimonials - profiles with reviews convert 3x better!</span>
             </li>
           </ul>
         </div>
@@ -307,3 +307,4 @@ export function PhotographerStats({
     </div>
   );
 }
+

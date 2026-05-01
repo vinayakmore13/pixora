@@ -115,7 +115,7 @@ export function SecureVerification() {
                 </div>
               </div>
               <p className="text-[10px] text-white/30 leading-relaxed">
-                By continuing, you agree to our security policy. This gallery is protected by Pixora Industrial Security.
+                By continuing, you agree to our security policy. This gallery is protected by Pixvora Industrial Security.
               </p>
               <button 
                 onClick={handleSendOTP}
@@ -189,3 +189,4 @@ export function SecureVerification() {
     </div>
   );
 }
+

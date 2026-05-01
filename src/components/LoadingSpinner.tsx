@@ -21,3 +21,4 @@ export function LoadingSpinner({ size = 'medium', text }: LoadingSpinnerProps) {
     </div>
   );
 }
+

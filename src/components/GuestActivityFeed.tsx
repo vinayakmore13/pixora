@@ -142,3 +142,4 @@ export function GuestPresence({ guests, maxPhotos }: GuestPresenceProps) {
     </div>
   );
 }
+

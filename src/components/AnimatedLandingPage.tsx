@@ -76,7 +76,7 @@ export function AnimatedLandingPage() {
           <div className="hero-image absolute inset-0 scale-110">
             <img
               className="w-full h-full object-cover brightness-[0.75]"
-              src="/pixora-hero.png"
+              src="/pixvora-hero.png"
               alt="Premium Wedding"
             />
           </div>
@@ -150,7 +150,7 @@ export function AnimatedLandingPage() {
               <div className="relative rounded-[2.5rem] overflow-hidden aspect-square silk-shadow bg-surface border border-outline-variant/10">
                 <img
                   className="w-full h-full object-cover opacity-90"
-                  src="https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&q=80&w=1000"
+                  src="/male-face-closeup.png"
                   alt="AI Smart Share"
                 />
                 
@@ -225,7 +225,7 @@ export function AnimatedLandingPage() {
             <FeatureCard 
               icon={<Camera size={32} />} 
               title="Pro Marketplace" 
-              desc="Book elite, vetted photographers directly through Pixora. Secure payments and instant delivery."
+              desc="Book elite, vetted photographers directly through Pixvora. Secure payments and instant delivery."
               gradient="from-primary/10 to-rose-500/10"
             />
             <FeatureCard 
@@ -334,3 +334,4 @@ function FeatureCard({ icon, title, desc, gradient }: { icon: React.ReactNode, t
     </motion.div>
   );
 }
+

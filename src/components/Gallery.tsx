@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { downloadBulkZip, downloadSingleImage } from '../lib/downloadUtils';
-import { getPhotoPublicUrl, getPhotosByEventId, PhotoMetadata } from '../lib/photoMetadata';
+import { getPhotoPublicUrl, getPhotosByEventId, PhotoMetadata, deletePhoto } from '../lib/photoMetadata';
 import { supabase } from '../lib/supabaseClient';
 import { cn } from '../lib/utils';
 import { SelfieCapture } from './SelfieCapture';
@@ -168,10 +168,9 @@ export function Gallery() {
   const [showOnlyClientSelections, setShowOnlyClientSelections] = useState(false);
   const [showOnlyMyPicks, setShowOnlyMyPicks] = useState(false);
 
-  // Compare Mode State
-  const [isCompareMode, setIsCompareMode] = useState(false);
-  const [comparePhotos, setComparePhotos] = useState<string[]>([]);
   const [showCompareModal, setShowCompareModal] = useState(false);
+  const [isAIUnlocked, setIsAIUnlocked] = useState(false);
+  const [photographerPlan, setPhotographerPlan] = useState<string>('starter');
 
   // Intersection Observer for Infinite Scroll
   const observerRef = useRef<IntersectionObserver | null>(null);
@@ -225,6 +224,30 @@ export function Gallery() {
       try {
         const isPhotographerUser = profile?.user_type === 'photographer' || profile?.is_admin || event?.user_id === profile?.id;
         
+        // Fetch Photographer Plan
+        if (event?.user_id) {
+          const { data: pProfile } = await supabase
+            .from('profiles')
+            .select('plan_type')
+            .eq('id', event.user_id)
+            .single();
+          if (pProfile) {
+            setPhotographerPlan(pProfile.plan_type);
+            if (pProfile.plan_type === 'professional') setIsAIUnlocked(true);
+          }
+        }
+
+        // Check if guest has already unlocked
+        if (!isPhotographerUser && profile?.email && id) {
+          const { data: unlock } = await supabase
+            .from('ai_unlocks')
+            .select('id')
+            .eq('guest_email', profile.email)
+            .eq('event_id', id)
+            .maybeSingle();
+          if (unlock) setIsAIUnlocked(true);
+        }
+
         if (!isPhotographerUser) {
           const session = searchParams.get('session');
           const fp = searchParams.get('fp');
@@ -418,6 +441,21 @@ export function Gallery() {
     });
   };
 
+  const handleImageError = async (photoId: string) => {
+    // Only auto-delete for photographers to avoid accidental deletions by guests
+    if (!isPhotographer) return;
+    
+    // Immediately remove from UI
+    setPhotos(prev => prev.filter(p => p.id !== photoId));
+    
+    try {
+      // Silently delete in the background
+      await deletePhoto(photoId);
+    } catch (err) {
+      console.error(`[CLEANUP] Failed to remove broken photo: ${photoId}`, err);
+    }
+  };
+
   const handleSingleDownload = async (photo: PhotoMetadata, e: React.MouseEvent) => {
     e.stopPropagation();
     const filename = photo.file_name || `photo-${photo.id}.jpg`;
@@ -452,12 +490,9 @@ export function Gallery() {
 
     if (confirm(`Are you sure you want to delete this photo permanently?`)) {
       try {
-        const { error } = await supabase
-          .from('photos')
-          .delete()
-          .eq('id', photo.id);
+        const result = await deletePhoto(photo.id);
 
-        if (error) throw error;
+        if (!result.success) throw new Error(result.error || 'Failed to delete photo');
 
         setPhotos(prev => prev.filter(p => p.id !== photo.id));
         if (selectedPhotoIndex !== null) setSelectedPhotoIndex(null);
@@ -643,6 +678,7 @@ export function Gallery() {
                         alt={photo.file_name} 
                         className="w-full h-auto transition-transform duration-700 group-hover:scale-105" 
                         loading="lazy"
+                        onError={() => handleImageError(photo.id)}
                       />
                     ) : (
                       <SecureImage
@@ -651,6 +687,7 @@ export function Gallery() {
                         className="w-full h-auto transition-transform duration-700 group-hover:scale-105"
                         isProtected={isSecure}
                         watermarkText={profile?.email || 'GUEST'}
+                        onError={() => handleImageError(photo.id)}
                       />
                     )}
                     
@@ -887,24 +924,60 @@ export function Gallery() {
                     </div>
                     <div>
                       <h2 className="text-3xl font-serif font-bold mb-2">We found {matchedPhotos.length} photos!</h2>
-                      <p className="text-white/60">We've securely identified photos of you in the gallery.</p>
+                      <p className="text-white/60">
+                        {isAIUnlocked 
+                          ? "We've securely identified photos of you in the gallery." 
+                          : `Get high-resolution access and download all ${matchedPhotos.length} photos of yourself.`}
+                      </p>
                     </div>
                     <div className="grid grid-cols-3 gap-2">
                        {matchedPhotos.slice(0, 3).map((photo, i) => (
-                        <div key={i} className="aspect-square rounded-xl overflow-hidden">
-                          <img src={getPhotoPublicUrl(photo.file_path)} alt="Found" className="w-full h-full object-cover" />
+                        <div key={i} className="aspect-square rounded-xl overflow-hidden relative">
+                          <img src={getPhotoPublicUrl(photo.file_path)} alt="Found" className="w-full h-full object-cover grayscale opacity-50" />
+                          {!isAIUnlocked && (
+                             <div className="absolute inset-0 flex items-center justify-center">
+                               <ShieldCheck size={20} className="text-white/40" />
+                             </div>
+                          )}
                         </div>
                       ))}
                     </div>
-                    <button 
-                      onClick={() => {
-                        setIsAIFinderOpen(false);
-                        setShowOnlyMatches(true);
-                      }}
-                      className="w-full signature-gradient py-4 rounded-full font-bold text-lg shadow-lg shadow-primary/20 active:scale-95 transition-all"
-                    >
-                      View My Photos
-                    </button>
+
+                    {isAIUnlocked ? (
+                      <button 
+                        onClick={() => {
+                          setIsAIFinderOpen(false);
+                          setShowOnlyMatches(true);
+                        }}
+                        className="w-full signature-gradient py-4 rounded-full font-bold text-lg shadow-lg shadow-primary/20 active:scale-95 transition-all"
+                      >
+                        View My Photos
+                      </button>
+                    ) : (
+                      <div className="space-y-4">
+                        <button 
+                          onClick={async () => {
+                            // In a real app, this would trigger payment
+                            alert('Payment Gateway would open here. Price: ₹49');
+                            
+                            // Simulate success by recording in DB
+                            if (profile?.email && id) {
+                              await supabase.from('ai_unlocks').insert({
+                                event_id: id,
+                                guest_email: profile.email,
+                                photo_ids: matchedPhotos.map(p => p.id)
+                              });
+                            }
+                            setIsAIUnlocked(true);
+                          }}
+                          className="w-full signature-gradient py-4 rounded-full font-bold text-lg shadow-lg shadow-primary/20 active:scale-95 transition-all flex items-center justify-center gap-3"
+                        >
+                          <Sparkles size={20} />
+                          Unlock for ₹49
+                        </button>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-white/40">One-time payment for this entire event</p>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1128,3 +1201,4 @@ function Check({ size, className }: { size?: number, className?: string }) {
     </svg>
   );
 }
+

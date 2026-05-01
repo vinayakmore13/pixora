@@ -261,3 +261,4 @@ export class SelectionAIService {
 export function getSelectionAIService(): SelectionAIService {
   return SelectionAIService.getInstance();
 }
+

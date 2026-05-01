@@ -3,6 +3,7 @@ import React, { useCallback, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabaseClient';
 import { cn } from '../lib/utils';
+import { azureStorageProvider } from '../lib/providers/azureStorageProvider';
 
 interface PortfolioImage {
   id: string;
@@ -59,27 +60,22 @@ export function PortfolioManagement({ images = [], onRefresh }: PortfolioManagem
         const fileName = `${user.id}/portfolio/${Date.now()}_${i}.${ext}`;
 
         // Upload to storage
-        const { error: storageError } = await supabase.storage
-          .from('photos')
-          .upload(fileName, file, { upsert: false });
-
-        if (storageError) {
-          console.error('Storage upload error:', storageError);
-          alert(`Storage upload error: ${storageError.message}`);
+        const result = await azureStorageProvider.uploadFile(file, fileName, 'photos');
+        if (result.error) {
+          console.error('Storage upload error:', result.error);
+          alert(`Storage upload error: ${result.error}`);
           continue;
         }
 
         // Get public URL
-        const { data: urlData } = supabase.storage
-          .from('photos')
-          .getPublicUrl(fileName);
+        const publicUrl = azureStorageProvider.getBlobUrl(fileName, 'photos');
 
         // Insert into portfolio_images
         const { error: dbError } = await supabase
           .from('portfolio_images')
           .insert({
             photographer_id: user.id,
-            image_url: urlData.publicUrl,
+            image_url: publicUrl,
             title: file.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' '),
             category: 'Weddings',
             display_order: images.length + i,
@@ -125,9 +121,9 @@ export function PortfolioManagement({ images = [], onRefresh }: PortfolioManagem
     setDeletingId(image.id);
     try {
       // Delete from storage
-      const path = image.image_url.split('/photos/')[1];
+      const path = image.image_url.split('/photos/')[1]?.split('?')[0]; // Handle Azure URL with SAS token
       if (path) {
-        await supabase.storage.from('photos').remove([decodeURIComponent(path)]);
+        await azureStorageProvider.deleteFile(decodeURIComponent(path), 'photos');
       }
       // Delete from DB
       await supabase.from('portfolio_images').delete().eq('id', image.id);
@@ -479,3 +475,4 @@ export function PortfolioManagement({ images = [], onRefresh }: PortfolioManagem
     </div>
   );
 }
+

@@ -99,7 +99,7 @@ export function BookingFlow() {
       //      key: 'YOUR_RAZORPAY_KEY_ID',
       //      amount: amountToPay * 100,
       //      currency: 'INR',
-      //      name: 'Pixora',
+      //      name: 'Pixvora',
       //      description: `Booking: ${pkg.title}`,
       //      order_id: order.id,
       //      handler: async (response) => { await saveBooking(); },
@@ -384,3 +384,4 @@ export function BookingFlow() {
     </div>
   );
 }
+

@@ -228,3 +228,4 @@ export function getCompressionRatio(originalSize: number, compressedSize: number
     if (originalSize === 0) return 0;
     return Math.round(((originalSize - compressedSize) / originalSize) * 100);
 }
+

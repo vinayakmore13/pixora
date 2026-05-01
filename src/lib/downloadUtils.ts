@@ -1,10 +1,9 @@
 import JSZip from 'jszip';
-import { supabase } from './supabaseClient';
+import { azureStorageProvider } from './providers/azureStorageProvider';
 
 export async function downloadSingleImage(filePath: string, filename: string) {
   try {
-    const { data: blob, error } = await supabase.storage.from('photos').download(filePath);
-    if (error) throw error;
+    const blob = await azureStorageProvider.downloadBlob(filePath, 'photos');
     
     const objectUrl = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -26,8 +25,7 @@ export async function downloadBulkZip(photos: { filePath: string; filename: stri
     
     // Fetch all photos and add to zip
     const fetchPromises = photos.map(async (photo) => {
-      const { data: blob, error } = await supabase.storage.from('photos').download(photo.filePath);
-      if (error) throw error;
+      const blob = await azureStorageProvider.downloadBlob(photo.filePath, 'photos');
       zip.file(photo.filename, blob);
     });
     
@@ -47,3 +45,4 @@ export async function downloadBulkZip(photos: { filePath: string; filename: stri
     throw error;
   }
 }
+

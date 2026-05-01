@@ -261,3 +261,4 @@ export function CameraSyncSetup({ onConfigured, isLoading }: CameraSyncSetupProp
     </div>
   );
 }
+

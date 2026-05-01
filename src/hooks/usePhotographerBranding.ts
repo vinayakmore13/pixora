@@ -141,3 +141,4 @@ export function useEventBranding(eventId: string | null | undefined) {
     photographerId,
   };
 }
+

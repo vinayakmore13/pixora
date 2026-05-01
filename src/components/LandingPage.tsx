@@ -110,7 +110,7 @@ export function LandingPage() {
                   <FeatureCard
                     icon={<Camera className="text-tertiary" size={32} />}
                     title="Pro Marketplace"
-                    description="Connect with vetted, elite event photographers who use Pixora to deliver high-resolution heirlooms."
+                    description="Connect with vetted, elite event photographers who use Pixvora to deliver high-resolution heirlooms."
                     color="tertiary"
                   />
                 )}
@@ -168,7 +168,7 @@ export function LandingPage() {
         </div>
       </section>
 
-      {/* For Photographers */}
+      {/* Marketplace */}
       <section className="py-32 bg-surface">
         <div className="max-w-7xl mx-auto px-8">
           <div className="grid md:grid-cols-2 gap-20 items-center">
@@ -188,7 +188,7 @@ export function LandingPage() {
                 For the Professionals
               </span>
               <h2 className="text-4xl md:text-5xl font-bold tracking-tight text-on-surface">Grow Your Photography Business</h2>
-              <p className="text-on-surface-variant text-lg leading-relaxed">Pixora is more than a sharing tool—it's a client management and delivery powerhouse designed specifically for elite photographers.</p>
+              <p className="text-on-surface-variant text-lg leading-relaxed">Pixvora is more than a sharing tool—it's a client management and delivery powerhouse designed specifically for elite photographers.</p>
               <ul className="space-y-6">
                 {["Instant gallery delivery with zero compression", "Direct client booking and inquiry management", "Automatic guest face-matching for prints sales", "Professional portfolio hosting in an editorial layout"].map((item, i) => (
                   <div key={i}>
@@ -289,3 +289,4 @@ function ListItem({ text }: { text: string }) {
     </li>
   );
 }
+

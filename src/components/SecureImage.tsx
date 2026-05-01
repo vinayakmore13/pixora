@@ -7,9 +7,10 @@ interface SecureImageProps {
   className?: string;
   watermarkText?: string;
   isProtected?: boolean;
+  onError?: () => void;
 }
 
-export function SecureImage({ src, alt, className, watermarkText, isProtected = true }: SecureImageProps) {
+export function SecureImage({ src, alt, className, watermarkText, isProtected = true, onError }: SecureImageProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -65,7 +66,7 @@ export function SecureImage({ src, alt, className, watermarkText, isProtected = 
       ctx.rotate(-Math.PI / 4);
       for (let i = -canvas.width; i < canvas.width * 2; i += 200) {
         for (let j = -canvas.height; j < canvas.height * 2; j += 100) {
-          ctx.fillText('PIXORA PROTECTED', i, j);
+          ctx.fillText('PIXVORA PROTECTED', i, j);
         }
       }
       ctx.restore();
@@ -95,6 +96,7 @@ export function SecureImage({ src, alt, className, watermarkText, isProtected = 
     img.onerror = () => {
       setError(true);
       setLoading(false);
+      onError?.();
     };
 
     // Aggressive focus check inside the render loop's context
@@ -110,7 +112,7 @@ export function SecureImage({ src, alt, className, watermarkText, isProtected = 
   }, [src, isProtected, watermarkText, isBlackout]);
 
   if (!isProtected) {
-    return <img src={src} alt={alt} className={className} />;
+    return <img src={src} alt={alt} className={className} onError={onError} />;
   }
 
   return (
@@ -148,3 +150,4 @@ export function SecureImage({ src, alt, className, watermarkText, isProtected = 
     </div>
   );
 }
+

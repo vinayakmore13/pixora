@@ -71,7 +71,7 @@ export function Header() {
               to="/"
               className="text-2xl font-serif font-bold text-primary tracking-tighter"
             >
-              Pixora
+              Pixvora
             </Link>
           </div>
 
@@ -135,7 +135,7 @@ export function Header() {
           )}
           <Link to="/" className="flex items-center gap-2">
             <span className={`text-2xl font-serif font-bold tracking-tight transition-colors ${isHome && !isScrolled ? 'text-white' : 'text-primary'}`}>
-              Pixora
+              Pixvora
             </span>
           </Link>
         </div>
@@ -145,13 +145,13 @@ export function Header() {
             to="/"
             className={`font-medium text-sm tracking-wide transition-colors ${isHome && !isScrolled ? 'text-white border-b-2 border-white pb-1' : 'text-primary border-b-2 border-primary pb-1'}`}
           >
-            For Hosts
+            Home
           </Link>
           <Link
             to="/marketplace"
             className={`font-medium text-sm tracking-wide transition-colors ${isHome && !isScrolled ? 'text-white/80 hover:text-white' : 'text-on-surface/70 hover:text-primary'}`}
           >
-            For Photographers
+            Marketplace
           </Link>
           <Link
             to="/features"
@@ -258,8 +258,8 @@ export function Header() {
       {isMenuOpen && (
         <div className="md:hidden glass-nav mt-2 mx-4 rounded-2xl border border-outline-variant/10 shadow-xl overflow-hidden animate-in slide-in-from-top-4 duration-300">
           <div className="p-4 space-y-4">
-            <Link to="/" onClick={() => setIsMenuOpen(false)} className="block font-medium text-on-surface hover:text-primary transition-colors">For Hosts</Link>
-            <Link to="/marketplace" onClick={() => setIsMenuOpen(false)} className="block font-medium text-on-surface hover:text-primary transition-colors">For Photographers</Link>
+            <Link to="/" onClick={() => setIsMenuOpen(false)} className="block font-medium text-on-surface hover:text-primary transition-colors">Home</Link>
+            <Link to="/marketplace" onClick={() => setIsMenuOpen(false)} className="block font-medium text-on-surface hover:text-primary transition-colors">Marketplace</Link>
             <Link to="/features" onClick={() => setIsMenuOpen(false)} className="block font-medium text-on-surface hover:text-primary transition-colors">Features</Link>
             <Link to="/pricing" onClick={() => setIsMenuOpen(false)} className="block font-medium text-on-surface hover:text-primary transition-colors">Pricing</Link>
             {!user && (
@@ -301,7 +301,7 @@ export function Footer() {
     )}>
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-8 md:gap-12 px-6 md:px-12 py-12 md:py-20 max-w-7xl mx-auto text-sm leading-relaxed">
         <div className="col-span-1 sm:col-span-2 md:col-span-1 space-y-6">
-          <div className="text-xl font-serif font-bold text-primary tracking-tighter">Pixora</div>
+          <div className="text-xl font-serif font-bold text-primary tracking-tighter">Pixvora</div>
           <p className="text-on-surface/60 max-w-xs">
             Elevating event memories through editorial design and intelligent
             technology.
@@ -318,7 +318,7 @@ export function Footer() {
           <ul className="space-y-2 text-on-surface/60">
             <li>
               <Link to="/" className="hover:text-primary transition-all">
-                For Hosts
+                Home
               </Link>
             </li>
             <li>
@@ -326,7 +326,7 @@ export function Footer() {
                 to="/marketplace"
                 className="hover:text-primary transition-all"
               >
-                For Photographers
+                Marketplace
               </Link>
             </li>
             <li>
@@ -445,7 +445,7 @@ export function Footer() {
 
       <div className="max-w-7xl mx-auto px-6 md:px-12 pb-12 flex flex-col md:flex-row justify-between items-center border-t border-on-surface/5 pt-8 gap-6 md:gap-4">
         <div className="text-on-surface/60 text-xs font-medium">
-          © 2024 Pixora. The Digital Curator.
+          © 2024 Pixvora. The Digital Curator.
         </div>
         <div className="flex flex-wrap justify-center gap-6 md:gap-8 text-[11px] font-bold uppercase tracking-wider">
           <Link
@@ -471,3 +471,4 @@ export function Footer() {
     </footer>
   );
 }
+

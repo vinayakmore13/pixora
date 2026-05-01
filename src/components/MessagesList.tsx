@@ -195,7 +195,7 @@ export function MessagesList() {
             </button>
             <h1 className="text-3xl md:text-4xl font-serif font-bold text-on-surface">Messages</h1>
           </div>
-          {profile?.user_type === 'couple' && (
+            {profile?.user_type === 'user' && (
             <Link
               to="/marketplace"
               className="flex items-center gap-2 text-sm font-bold text-primary hover:text-primary/80 transition-colors"
@@ -229,11 +229,11 @@ export function MessagesList() {
             </div>
             <h3 className="text-xl font-bold text-on-surface mb-2">No conversations yet</h3>
             <p className="text-on-surface-variant mb-6">
-              {profile?.user_type === 'couple'
+              {profile?.user_type === 'user'
                 ? 'Find a photographer and start chatting to plan your perfect shoot!'
                 : 'Clients will appear here when they reach out to you.'}
             </p>
-            {profile?.user_type === 'couple' && (
+          {profile?.user_type === 'user' && (
               <Link
                 to="/marketplace"
                 className="inline-flex items-center gap-2 signature-gradient text-white px-6 py-3 rounded-full font-bold shadow-lg shadow-primary/20 hover:brightness-110 active:scale-95 transition-all"
@@ -306,3 +306,4 @@ export function MessagesList() {
     </div>
   );
 }
+

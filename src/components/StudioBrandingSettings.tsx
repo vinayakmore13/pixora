@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { drawTextWatermark, drawLogoWatermark, drawLogoTextWatermark, loadImage } from '../lib/watermarkUtils';
 import type { WatermarkConfig } from '../lib/watermarkUtils';
+import { azureStorageProvider } from '../lib/providers/azureStorageProvider';
 
 const SERVICE_OPTIONS = [
   'Wedding Photography', 'Pre-Wedding Shoots', 'Reception Coverage',
@@ -104,17 +105,12 @@ export function StudioBrandingSettings() {
       const ext = file.name.split('.').pop();
       const filePath = `${user.id}/logo.${ext}`;
 
-      const { error: uploadError } = await supabase.storage
-        .from('studio-logos')
-        .upload(filePath, file, { upsert: true });
+      const result = await azureStorageProvider.uploadFile(file, filePath, 'photographer-assets');
+      if (result.error) throw new Error(result.error);
 
-      if (uploadError) throw uploadError;
+      const publicUrl = azureStorageProvider.getBlobUrl(filePath, 'photographer-assets');
 
-      const { data: urlData } = supabase.storage
-        .from('studio-logos')
-        .getPublicUrl(filePath);
-
-      setForm(prev => ({ ...prev, logo_url: urlData.publicUrl }));
+      setForm(prev => ({ ...prev, logo_url: publicUrl }));
       setMessage({ text: 'Logo uploaded!', type: 'success' });
     } catch (err: any) {
       console.error('Logo upload error:', err);
@@ -472,3 +468,4 @@ export function StudioBrandingSettings() {
     </div>
   );
 }
+

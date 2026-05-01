@@ -19,6 +19,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 import { cn } from '../lib/utils';
+import { azureStorageProvider } from '../lib/providers/azureStorageProvider';
 import { SelfieCapture } from './SelfieCapture';
 import { LeadInquiryForm } from './LeadInquiryForm';
 import type { PhotographerBranding } from '../hooks/usePhotographerBranding';
@@ -73,7 +74,7 @@ export function PublicEventPage() {
             fetchEvent();
         }
         // Check for existing registration
-        const savedReg = localStorage.getItem(`pixora_reg_${qrCode}`);
+        const savedReg = localStorage.getItem(`pixvora_reg_${qrCode}`);
         if (savedReg) {
             const data = JSON.parse(savedReg);
             setRegistrationId(data.id);
@@ -115,12 +116,12 @@ export function PublicEventPage() {
             if (fetchError) throw fetchError;
             
             const formattedMatches = (data || []).map(match => {
-                const { data: urlData } = supabase.storage.from('photos').getPublicUrl(match.photos.file_path);
+                const url = azureStorageProvider.getBlobUrl(match.photos.file_path, 'photos');
                 return {
                     ...match,
                     photos: {
                         ...match.photos,
-                        url: urlData.publicUrl
+                        url: url
                     }
                 };
             });
@@ -244,7 +245,7 @@ export function PublicEventPage() {
             if (regError) throw regError;
 
             setRegistrationId(data.id);
-            localStorage.setItem(`pixora_reg_${qrCode}`, JSON.stringify({
+            localStorage.setItem(`pixvora_reg_${qrCode}`, JSON.stringify({
                 id: data.id,
                 name: guestName
             }));
@@ -531,7 +532,7 @@ export function PublicEventPage() {
                             </div>
                             <div className="flex gap-2">
                                 <button
-                                    onClick={() => { localStorage.removeItem(`pixora_reg_${qrCode}`); window.location.reload(); }}
+                                    onClick={() => { localStorage.removeItem(`pixvora_reg_${qrCode}`); window.location.reload(); }}
                                     className="p-3 rounded-2xl bg-white silk-shadow text-on-surface-variant hover:text-primary transition-colors"
                                     title="Not you? Register again"
                                 >
@@ -624,3 +625,4 @@ export function PublicEventPage() {
         </div>
     );
 }
+

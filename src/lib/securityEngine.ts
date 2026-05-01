@@ -57,3 +57,4 @@ export function injectInvisibleWatermark(ctx: CanvasRenderingContext2D, width: n
 
   ctx.putImageData(imageData, 0, 0);
 }
+

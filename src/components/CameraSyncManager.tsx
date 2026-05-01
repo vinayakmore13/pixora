@@ -192,3 +192,4 @@ export function CameraSyncManager({ eventId, onSyncUpdate }: CameraSyncManagerPr
     </div>
   );
 }
+

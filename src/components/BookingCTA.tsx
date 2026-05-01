@@ -198,7 +198,7 @@ export function BookingCTA({
       <div className="grid grid-cols-3 gap-4 text-center">
         <div>
           <div className="text-3xl font-bold text-gray-900">500+</div>
-          <p className="text-sm text-gray-600">Happy Couples</p>
+           <p className="text-sm text-gray-600">Happy Users</p>
         </div>
         <div>
           <div className="text-3xl font-bold text-gray-900">4.8★</div>
@@ -212,3 +212,4 @@ export function BookingCTA({
     </div>
   );
 }
+

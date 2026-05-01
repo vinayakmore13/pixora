@@ -104,7 +104,7 @@ export function HelpSupport() {
           <ContactCard 
             icon={<Mail className="text-primary" />} 
             title="Email Support" 
-            detail="support@pixora.com" 
+            detail="support@pixvora.com" 
             description="We typically respond within 12-24 hours."
           />
           <ContactCard 
@@ -158,4 +158,5 @@ function ContactCard({ icon, title, detail, description, onClick }: { icon: Reac
     </button>
   );
 }
+
 

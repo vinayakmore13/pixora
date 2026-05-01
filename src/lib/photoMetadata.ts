@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { azureStorageProvider } from './providers/azureStorageProvider';
 
 export interface PhotoMetadata {
   id: string;
@@ -167,16 +168,22 @@ export async function deletePhoto(
       .single();
 
     if (fetchError) {
+      if (fetchError.code === 'PGRST116') return { success: true }; // Already deleted
       return { success: false, error: fetchError.message };
     }
 
-    // Delete from storage
-    const { error: storageError } = await supabase.storage
-      .from('photos')
-      .remove([photo.file_path]);
+    // Delete from Azure storage (using deleteIfExists to avoid errors)
+    const storageResult = await azureStorageProvider.deleteFile(photo.file_path, 'photos');
 
-    if (storageError) {
-      console.error('Error deleting from storage:', storageError);
+    if (!storageResult.success) {
+      console.error('Error deleting from Azure storage:', storageResult.error);
+    }
+
+    // Also attempt to delete from Supabase storage in case it's an old file
+    try {
+      await supabase.storage.from('photos').remove([photo.file_path]);
+    } catch (supabaseErr) {
+      console.error('Error deleting from Supabase storage:', supabaseErr);
     }
 
     // Delete from database
@@ -221,11 +228,7 @@ export async function getPhotoCountByEventId(
  * Get public URL for a photo
  */
 export function getPhotoPublicUrl(filePath: string): string {
-  const { data } = supabase.storage
-    .from('photos')
-    .getPublicUrl(filePath);
-
-  return data.publicUrl;
+  return azureStorageProvider.getBlobUrl(filePath, 'photos');
 }
 
 /**
@@ -237,3 +240,4 @@ export async function approvePhoto(
 ): Promise<{ success: boolean; error?: string }> {
   return updatePhotoMetadata(photoId, { is_approved: isApproved });
 }
+

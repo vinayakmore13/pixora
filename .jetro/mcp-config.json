@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "jetro": {
+      "command": "C:\\Users\\LENOVO\\.jetro\\runtime\\node-win32-x64.exe",
+      "args": [
+        "C:\\Users\\LENOVO\\.jetro\\mcp-server\\index.js"
+      ],
+      "env": {
+        "JET_WORKSPACE": "e:\\web\\wedhub-main (1)\\wedhub-main",
+        "JET_API_URL": "https://api.jetro.ai",
+        "PATH": "C:\\Users\\LENOVO\\.jetro\\runtime;C:\\Program Files (x86)\\VMware\\VMware Player\\bin\\;C:\\Program Files\\Common Files\\Oracle\\Java\\javapath;C:\\Program Files (x86)\\Common Files\\Oracle\\Java\\java8path;C:\\Program Files (x86)\\Common Files\\Oracle\\Java\\javapath;E:\\oracle\\product\\10.2.0\\db_1\\bin;C:\\Windows\\system32;C:\\Windows;C:\\Windows\\System32\\Wbem;C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\;C:\\Windows\\System32\\OpenSSH\\;C:\\Program Files (x86)\\NVIDIA Corporation\\PhysX\\Common;C:\\WINDOWS\\system32;C:\\WINDOWS;C:\\WINDOWS\\System32\\Wbem;C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\;C:\\WINDOWS\\System32\\OpenSSH\\;C:\\Program Files\\Git\\cmd;C:\\Program Files\\Java\\jdk-17\\bin;C:\\Program Files\\nodejs\\;C:\\Program Files\\Docker\\Docker\\resources\\bin;C:\\Users\\LENOVO\\Downloads\\maven-mvnd-1.0.2-windows-amd64\\maven-mvnd-1.0.2-windows-amd64\\bin;C:\\Users\\LENOVO\\Downloads\\apache-maven-3.9.11-bin\\apache-maven-3.9.11\\bin;C:\\Program Files\\NVIDIA Corporation\\NVIDIA App\\NvDLISR;C:\\Program Files\\Java\\jdk-25\\bin;C:\\Program Files\\Java\\jre1.8.0_481\\bin;C:\\Program Files\\MySQL\\MySQL Shell 8.0\\bin\\;C:\\Users\\LENOVO\\AppData\\Local\\Programs\\Python\\Python312\\Scripts\\;C:\\Users\\LENOVO\\AppData\\Local\\Programs\\Python\\Python312\\;C:\\Users\\LENOVO\\AppData\\Local\\Programs\\Python\\Python311\\Scripts\\;C:\\Users\\LENOVO\\AppData\\Local\\Programs\\Python\\Python311\\;C:\\Users\\LENOVO\\AppData\\Local\\Microsoft\\WindowsApps;C:\\Users\\LENOVO\\AppData\\Local\\Programs\\Microsoft VS Code\\bin;C:\\Program Files\\JetBrains\\PyCharm Community Edition 2024.1.4\\bin;;C:\\Users\\LENOVO\\AppData\\Local\\Programs\\Ollama;C:\\Users\\LENOVO\\AppData\\Roaming\\npm;C:\\Program Files (x86)\\MongoDB Atlas CLI\\;C:\\Program Files\\Java\\jdk-25\\bin;C:\\Users\\LENOVO\\AppData\\Local\\GitHubDesktop\\bin;C:\\Users\\LENOVO\\AppData\\Local\\Programs\\Antigravity\\bin"
+      }
+    }
+  }
+}

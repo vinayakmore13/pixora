@@ -77,3 +77,4 @@ async function testSupabaseConnection() {
 
 // Run the test
 testSupabaseConnection();
+
