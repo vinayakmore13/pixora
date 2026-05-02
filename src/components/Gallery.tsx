@@ -169,6 +169,8 @@ export function Gallery() {
   const [showOnlyMyPicks, setShowOnlyMyPicks] = useState(false);
 
   const [showCompareModal, setShowCompareModal] = useState(false);
+  const [isCompareMode, setIsCompareMode] = useState(false);
+  const [comparePhotos, setComparePhotos] = useState<string[]>([]);
   const [isAIUnlocked, setIsAIUnlocked] = useState(false);
   const [photographerPlan, setPhotographerPlan] = useState<string>('starter');
 
@@ -277,8 +279,8 @@ export function Gallery() {
     fetchInitialData();
 
     // Subscribe to photo status updates
-    const channel = supabase
-      .channel('gallery_realtime')
+    const photosChannel = supabase
+      .channel('gallery_photos_realtime')
       .on('postgres_changes', { 
         event: 'UPDATE', 
         schema: 'public', 
@@ -297,41 +299,74 @@ export function Gallery() {
       })
       .subscribe();
 
+    // Subscribe to favorites for photographers
+    let favChannel: any = null;
+    if (isPhotographer) {
+      favChannel = supabase
+        .channel('gallery_favs_realtime')
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'photo_favorites'
+        }, () => {
+          // Trigger a refresh of client selections
+          fetchClientSelections();
+        })
+        .subscribe();
+    }
+
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(photosChannel);
+      if (favChannel) supabase.removeChannel(favChannel);
     };
-  }, [id, profile, searchParams, navigate]);
+  }, [id, profile, searchParams, navigate, isPhotographer, fetchClientSelections]);
 
   // 2. Separate Effect for Client Selections (Photographers Only)
   useEffect(() => {
     if (!id || !isPhotographer || photos.length === 0) return;
 
-    const fetchClientSelections = async () => {
-      try {
-        const { data: selection } = await supabase
-          .from('photo_selections')
-          .select('id')
-          .eq('event_id', id)
-          .maybeSingle();
+  const fetchClientSelections = useCallback(async () => {
+    if (!id || !isPhotographer) return;
+    try {
+      const { data: selection } = await supabase
+        .from('photo_selections')
+        .select('id')
+        .eq('event_id', id)
+        .maybeSingle();
 
-        if (selection) {
-          const { data: favorites } = await supabase
-            .from('photo_favorites')
-            .select('photo_id')
-            .eq('selection_id', selection.id);
+      if (selection) {
+        const { data: favorites } = await supabase
+          .from('photo_favorites')
+          .select('photo_id')
+          .eq('selection_id', selection.id);
 
-          if (favorites && favorites.length > 0) {
-            const selectedIds = favorites.map(f => f.photo_id);
-            setClientSelectedPhotos(photos.filter(p => selectedIds.includes(p.id)));
+        if (favorites && favorites.length > 0) {
+          const selectedIds = favorites.map(f => f.photo_id);
+          
+          // Fetch photo metadata for these IDs
+          const { data: selectedPhotosData } = await supabase
+            .from('photos')
+            .select('*')
+            .in('id', selectedIds);
+            
+          if (selectedPhotosData) {
+            setClientSelectedPhotos(selectedPhotosData as PhotoMetadata[]);
           }
+        } else {
+          setClientSelectedPhotos([]);
         }
-      } catch (err) {
-        console.error('[MANAGEMENT] Failed to load client selections', err);
       }
-    };
+    } catch (err) {
+      console.error('[MANAGEMENT] Failed to load client selections', err);
+    }
+  }, [id, isPhotographer]);
 
-    fetchClientSelections();
-  }, [id, isPhotographer, photos.length]);
+  // 2. Separate Effect for Client Selections (Photographers Only)
+  useEffect(() => {
+    if (isPhotographer) {
+      fetchClientSelections();
+    }
+  }, [isPhotographer, fetchClientSelections]);
 
   const loadMorePhotos = async () => {
     if (!id || loadingMore || !hasMore) return;
@@ -1117,7 +1152,7 @@ export function Gallery() {
             "grid-cols-2 grid-rows-2"
           )}>
             {comparePhotos.map(photoId => {
-              const photo = photos.find(p => p.id === photoId);
+              const photo = photos.find(p => p.id === photoId) || clientSelectedPhotos.find(p => p.id === photoId);
               if (!photo) return null;
               
               const isFav = selectedPhotoIds.has(photo.id);
