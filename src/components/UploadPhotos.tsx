@@ -56,6 +56,11 @@ export function UploadPhotos() {
   // Initialize upload manager when event is selected
   React.useEffect(() => {
     if (selectedEventId && user) {
+      // Auto-ensure selection portal exists when an event is selected for upload
+      import('../lib/selectionHelpers').then(({ ensurePhotoSelectionPortal }) => {
+        ensurePhotoSelectionPortal(selectedEventId);
+      });
+
       const manager = new UploadManager({
         eventId: selectedEventId,
         eventName: selectedEventName,
@@ -256,8 +261,23 @@ export function UploadPhotos() {
                         : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container"
                     )}
                   >
-                    Edited Selections
+                    Edited
                   </button>
+                </div>
+              </div>
+
+              {/* Informational Banner */}
+              <div className="pt-2">
+                <div className="bg-primary/10 border border-primary/20 rounded-xl p-4 flex gap-3">
+                  <CheckCircle2 className="text-primary shrink-0" size={18} />
+                  <div>
+                    <p className="text-[11px] leading-tight text-primary font-bold mb-1">
+                      Automated Selection Pool
+                    </p>
+                    <p className="text-[10px] leading-tight text-on-surface-variant">
+                      Photos you upload are automatically added to the client selection portal. No manual curation needed.
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>

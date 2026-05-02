@@ -10,6 +10,7 @@ interface UserProfile {
     is_admin: boolean;
     avatar_url?: string;
     selfie_descriptor?: string;
+    studio_name?: string | null;
     created_at: string;
 }
 
@@ -58,7 +59,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // Race the profile fetch against the timeout
             const profileQuery = supabase
                 .from('profiles')
-                .select('*')
+                .select('*, photographer_profiles(studio_name)')
                 .eq('id', userId)
                 .single();
 
@@ -80,8 +81,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             } else {
               console.warn('[Auth] No profile found in DB for user:', userId);
             }
-            // Ensure is_admin is explicitly boolean
-            setProfile(data ? { ...data, is_admin: !!data.is_admin } : null);
+            // Ensure is_admin is explicitly boolean and studio_name is flattened
+            const studioName = Array.isArray(data.photographer_profiles) 
+                ? data.photographer_profiles[0]?.studio_name 
+                : data.photographer_profiles?.studio_name;
+
+            const profileData = data ? { 
+                ...data, 
+                is_admin: !!data.is_admin,
+                studio_name: studioName
+            } : null;
+            setProfile(profileData);
         } catch (error) {
             console.error('[Auth] Unexpected error fetching profile:', error);
             if (mountedRef.current) {
@@ -355,9 +365,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 return { error: new Error('No user logged in') };
             }
 
+            // Filter out fields that don't belong to the 'profiles' table
+            const { studio_name, ...profileUpdates } = updates;
+
             const { error } = await supabase
                 .from('profiles')
-                .update(updates)
+                .update(profileUpdates)
                 .eq('id', user.id);
 
             if (error) {

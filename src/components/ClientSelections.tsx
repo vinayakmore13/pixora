@@ -12,6 +12,7 @@ import { UploadManager, UploadFile } from '../lib/uploadManager';
 import { useAuth } from '../contexts/AuthContext';
 import { azureStorageProvider } from '../lib/providers/azureStorageProvider';
 import { deletePhoto } from '../lib/photoMetadata';
+import { ensurePhotoSelectionPortal, syncAllPhotosToSelectionPool } from '../lib/selectionHelpers';
 
 interface ClientSelectionsProps {
   eventId: string;
@@ -218,19 +219,7 @@ export function ClientSelections({ eventId }: ClientSelectionsProps) {
     }
   }, [eventPhotos.length, selectionConfig, loading]);
 
-  const selectAllPhotos = async () => {
-    try {
-      const { error } = await supabase
-        .from('photos')
-        .update({ is_in_selection_pool: true })
-        .eq('event_id', eventId);
-      
-      if (error) throw error;
-      fetchEventPhotos();
-    } catch (err) {
-      console.error('Select all error:', err);
-    }
-  };
+
 
   const togglePhotoInPool = async (photoId: string) => {
     const photo = eventPhotos.find(p => p.id === photoId);
@@ -324,12 +313,48 @@ export function ClientSelections({ eventId }: ClientSelectionsProps) {
     fetchEventPhotos();
   };
 
+  const handleSyncAll = async () => {
+    if (!confirm('This will mark all photos in this event as available for client selection. Proceed?')) return;
+    try {
+      setLoading(true);
+      const result = await syncAllPhotosToSelectionPool(eventId);
+      if (result.success) {
+        await fetchEventPhotos();
+      } else {
+        alert('Failed to sync photos: ' + result.error);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSelectAllBulk = () => {
+    if (selectedForBulk.size === eventPhotos.length) {
+      setSelectedForBulk(new Set());
+    } else {
+      setSelectedForBulk(new Set(eventPhotos.map(p => p.id)));
+    }
+  };
+
   if (loading) return <div className="flex justify-center p-12"><Loader2 className="animate-spin text-primary" size={32} /></div>;
 
   const poolPhotos = eventPhotos.filter(p => p.is_in_selection_pool);
 
   return (
     <div className="space-y-8 pb-20 max-w-6xl mx-auto">
+      {/* Automation Banner */}
+      <div className="bg-primary/5 border border-primary/20 rounded-[2rem] p-6 flex items-start gap-4 mb-2">
+        <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0">
+          <CheckCircle2 className="text-primary" size={24} />
+        </div>
+        <div>
+          <h3 className="text-sm font-bold text-on-surface mb-1">Zero-Touch Workflow Active</h3>
+          <p className="text-xs text-on-surface-variant leading-relaxed max-w-2xl">
+            Photos you upload are now automatically visible to the client in their selection portal. 
+            Use the "Sync All" button in the gallery to include any existing photos.
+          </p>
+        </div>
+      </div>
       {columnError && (
         <div className="bg-red-50 border border-red-200 p-4 rounded-2xl flex items-start gap-3">
           <AlertCircle className="text-red-500 mt-1" size={20} />
@@ -367,15 +392,7 @@ export function ClientSelections({ eventId }: ClientSelectionsProps) {
                 Review {clientSelectedIds.size} Picks
               </button>
             )}
-            {eventPhotos.some(p => !p.is_in_selection_pool) && (
-              <button
-                onClick={selectAllPhotos}
-                className="flex items-center gap-2 px-6 py-3 bg-surface-container-high text-on-surface rounded-full font-bold text-sm hover:bg-surface-container-highest transition-all"
-              >
-                <Check size={18} />
-                Add All to Portal
-              </button>
-            )}
+
             <button 
               onClick={() => fileInputRef.current?.click()}
               disabled={isUploading}
@@ -420,6 +437,7 @@ export function ClientSelections({ eventId }: ClientSelectionsProps) {
                   className="w-full h-full object-cover"
                   onError={() => handleImageError(photo.id)}
                 />
+
                 {photo.is_in_selection_pool && (
                   <div className="absolute top-2 right-2 bg-primary text-white rounded-full p-1 shadow-lg">
                     <Check size={10} strokeWidth={4} />
@@ -522,6 +540,60 @@ export function ClientSelections({ eventId }: ClientSelectionsProps) {
           </header>
 
           <main className="p-8 max-w-[1600px] mx-auto">
+            <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+                <div className="flex items-center gap-4">
+                  <h3 className="text-xl font-bold text-on-surface">Gallery Pool</h3>
+                  <span className="bg-surface-container text-on-surface-variant text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider">
+                    {eventPhotos.filter(p => p.is_in_selection_pool).length} / {eventPhotos.length} IN POOL
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {!isBulkMode ? (
+                    <>
+                      <button
+                        onClick={handleSyncAll}
+                        className="flex items-center gap-2 px-4 py-2 bg-primary/10 text-primary hover:bg-primary/20 rounded-xl text-sm font-bold transition-all"
+                      >
+                        <Sparkles size={16} />
+                        Sync All to Portal
+                      </button>
+                      <button
+                        onClick={() => setIsBulkMode(true)}
+                        className="flex items-center gap-2 px-4 py-2 bg-surface-container text-on-surface-variant hover:bg-surface-container-high rounded-xl text-sm font-bold transition-all"
+                      >
+                        <LayoutGrid size={16} />
+                        Bulk Actions
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={handleSelectAllBulk}
+                        className="flex items-center gap-2 px-4 py-2 bg-surface-container text-on-surface-variant hover:bg-surface-container-high rounded-xl text-sm font-bold transition-all"
+                      >
+                        {selectedForBulk.size === eventPhotos.length ? 'Deselect All' : 'Select All'}
+                      </button>
+                      <button
+                        onClick={handleBulkDelete}
+                        disabled={selectedForBulk.size === 0}
+                        className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-xl text-sm font-bold transition-all disabled:opacity-50"
+                      >
+                        <Trash2 size={16} />
+                        Delete Selected ({selectedForBulk.size})
+                      </button>
+                      <button
+                        onClick={() => {
+                          setIsBulkMode(false);
+                          setSelectedForBulk(new Set());
+                        }}
+                        className="px-4 py-2 text-sm font-bold text-on-surface-variant"
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
               {eventPhotos.map(photo => {
                 return (

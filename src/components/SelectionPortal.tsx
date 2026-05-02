@@ -630,8 +630,7 @@ export function SelectionPortal() {
           const { error: selError } = await supabase
             .from('photo_selections')
             .update({ 
-              status: 'submitted',
-              is_submitted: true 
+              status: 'submitted'
             })
             .eq('id', selection.id);
             
