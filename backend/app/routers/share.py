@@ -236,6 +236,9 @@ def _validate_share_session(link_token: str, session_token: str) -> str:
 @router.post("/{event_id}/create-link", response_model=ShareLinkResponse)
 async def create_share_link(event_id: str, data: ShareLinkCreate):
     """Host only: generate a short-lived share link and QR code."""
+    if not event_id or event_id == "undefined":
+        raise HTTPException(status_code=400, detail="Invalid event ID")
+        
     if data.mode not in ALLOWED_SHARE_MODES:
         raise HTTPException(status_code=400, detail="Unsupported share mode")
 
@@ -374,7 +377,7 @@ async def match_selfie(token: str, file: UploadFile = File(...), session_token: 
         for photo in photos_res.data:
             signed_url = supabase.storage.from_("photos").create_signed_url(photo["file_path"], 3600)
             matches.append({
-                "photo_id": photo["id"],
+                "id": photo["id"],
                 "url": signed_url["signedURL"],
                 "thumbnail_url": photo["thumbnail_url"],
                 "similarity": similarity_map.get(photo["id"], 0),

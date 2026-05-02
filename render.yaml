@@ -3,7 +3,7 @@ services:
   - type: static
     name: pixvora-frontend
     env: static
-    buildCommand: npm install && npm run build
+    buildCommand: npm install && npm run download:models && npm run build
     staticPublishPath: ./dist
     routes:
       - type: rewrite
@@ -18,6 +18,12 @@ services:
         sync: false
       - key: VITE_AI_PROVIDER
         value: LOCAL
+      - key: VITE_AZURE_STORAGE_ACCOUNT_NAME
+        sync: false
+      - key: VITE_AZURE_STORAGE_SAS_TOKEN
+        sync: false
+      - key: VITE_AZURE_STORAGE_CONTAINER_NAME
+        value: photos
 
   # 2. Backend - FastAPI + DeepFace AI (Web Service)
   - type: web

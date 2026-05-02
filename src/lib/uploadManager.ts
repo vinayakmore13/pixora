@@ -52,6 +52,7 @@ export class UploadManager {
   private uploaderId?: string;
   private isGuestUpload: boolean;
   private isEdited: boolean;
+  private isInSelectionPool: boolean;
   private skipCompression: boolean;
   private photographerName?: string;
   private eventName?: string;
@@ -65,6 +66,7 @@ export class UploadManager {
       uploaderId?: string;
       isGuestUpload?: boolean;
       isEdited?: boolean;
+      isInSelectionPool?: boolean;
       skipCompression?: boolean;
       onProgress?: ProgressCallback;
       onComplete?: CompleteCallback;
@@ -79,6 +81,7 @@ export class UploadManager {
     this.uploaderId = options.uploaderId;
     this.isGuestUpload = options.isGuestUpload ?? false;
     this.isEdited = options.isEdited ?? false;
+    this.isInSelectionPool = options.isInSelectionPool ?? false;
     this.skipCompression = options.skipCompression ?? false;
     this.photographerName = options.photographerName;
     this.eventName = options.eventName;
@@ -363,6 +366,7 @@ export class UploadManager {
           is_approved: !this.isGuestUpload, // Auto-approve owner uploads
           is_guest_upload: this.isGuestUpload,
           is_edited: this.isEdited,
+          is_in_selection_pool: this.isInSelectionPool
         } : {})
       })
       .select('id')

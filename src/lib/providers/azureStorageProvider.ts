@@ -1,27 +1,43 @@
 import { BlobServiceClient, AnonymousCredential } from '@azure/storage-blob';
 
+// Try to get values from import.meta.env (Vite)
 const ACCOUNT_NAME = import.meta.env.VITE_AZURE_STORAGE_ACCOUNT_NAME;
-const SAS_TOKEN = import.meta.env.VITE_AZURE_STORAGE_SAS_TOKEN; // Should start with ?
+const SAS_TOKEN = import.meta.env.VITE_AZURE_STORAGE_SAS_TOKEN;
 const CONTAINER_NAME = import.meta.env.VITE_AZURE_STORAGE_CONTAINER_NAME || 'photos';
 
+// Debug logging for environment variables
+if (import.meta.env.DEV) {
+  console.log('Azure Storage Config:', {
+    accountName: ACCOUNT_NAME ? 'set' : 'MISSING',
+    sasToken: SAS_TOKEN ? 'set' : 'MISSING',
+    container: CONTAINER_NAME
+  });
+} else if (!ACCOUNT_NAME || !SAS_TOKEN) {
+  // Minimal logging for production to help debug deployment issues without leaking secrets
+  console.warn('Azure Storage Configuration is incomplete. Image uploads will fail.');
+}
+
 if (!ACCOUNT_NAME || !SAS_TOKEN) {
-  console.warn("Azure Storage credentials missing. Please set VITE_AZURE_STORAGE_ACCOUNT_NAME and VITE_AZURE_STORAGE_SAS_TOKEN in .env");
+  console.warn("Azure Storage credentials missing. Please set VITE_AZURE_STORAGE_ACCOUNT_NAME and VITE_AZURE_STORAGE_SAS_TOKEN in .env and RESTART your dev server.");
 }
 
 // Ensure SAS token starts with ?
-const cleanSasToken = SAS_TOKEN && !SAS_TOKEN.startsWith('?') ? `?${SAS_TOKEN}` : SAS_TOKEN;
+const cleanSasToken = SAS_TOKEN ? (SAS_TOKEN.startsWith('?') ? SAS_TOKEN : `?${SAS_TOKEN}`) : '';
 
-const blobUri = `https://${ACCOUNT_NAME}.blob.core.windows.net`;
-const blobServiceClient = new BlobServiceClient(
+const blobUri = ACCOUNT_NAME ? `https://${ACCOUNT_NAME}.blob.core.windows.net` : '';
+const blobServiceClient = (blobUri && SAS_TOKEN) ? new BlobServiceClient(
   `${blobUri}${cleanSasToken}`,
   new AnonymousCredential()
-);
+) : null;
 
 export const azureStorageProvider = {
   /**
    * Upload a file to Azure Blob Storage
    */
   async uploadFile(file: File | Blob, fileName: string, container: string = CONTAINER_NAME, contentType?: string): Promise<{ success: boolean; path?: string; error?: string }> {
+    if (!blobServiceClient) {
+      return { success: false, error: "Azure Storage is not configured. Check VITE_AZURE_STORAGE_ACCOUNT_NAME in .env" };
+    }
     try {
       const containerClient = blobServiceClient.getContainerClient(container);
       const blockBlobClient = containerClient.getBlockBlobClient(fileName);
@@ -44,15 +60,28 @@ export const azureStorageProvider = {
    */
   getBlobUrl(fileName: string, container: string = CONTAINER_NAME): string {
     // If it's already a full URL, return it
-    if (fileName.startsWith('http')) return fileName;
+    if (!fileName || fileName.startsWith('http')) return fileName || '';
     
-    return `https://${ACCOUNT_NAME}.blob.core.windows.net/${container}/${fileName}${cleanSasToken}`;
+    if (!ACCOUNT_NAME) {
+      console.warn("Azure Storage Account Name is missing");
+      return fileName; // Fallback to filename if not configured
+    }
+
+    // Sanitize fileName (remove leading slash if present)
+    const sanitizedFileName = fileName.startsWith('/') ? fileName.substring(1) : fileName;
+    // Sanitize container (remove slashes)
+    const sanitizedContainer = container.replace(/\//g, '');
+    
+    return `https://${ACCOUNT_NAME}.blob.core.windows.net/${sanitizedContainer}/${sanitizedFileName}${cleanSasToken}`;
   },
 
   /**
    * Delete a file from Azure Blob Storage
    */
   async deleteFile(fileName: string, container: string = CONTAINER_NAME): Promise<{ success: boolean; error?: string }> {
+    if (!blobServiceClient) {
+      return { success: false, error: "Azure Storage is not configured" };
+    }
     try {
       const containerClient = blobServiceClient.getContainerClient(container);
       const blockBlobClient = containerClient.getBlockBlobClient(fileName);
@@ -68,6 +97,9 @@ export const azureStorageProvider = {
    * Delete all blobs with a certain prefix (simulates deleting a folder)
    */
   async deleteFolder(prefix: string, container: string = CONTAINER_NAME): Promise<{ success: boolean; error?: string }> {
+    if (!blobServiceClient) {
+      return { success: false, error: "Azure Storage is not configured" };
+    }
     try {
       const containerClient = blobServiceClient.getContainerClient(container);
       let i = 0;

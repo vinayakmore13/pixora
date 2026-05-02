@@ -64,6 +64,7 @@ export function UploadPhotos() {
         uploaderId: user.id,
         isGuestUpload: false,
         isEdited: uploadType === 'edited',
+        isInSelectionPool: true, // By default, photographer uploads should be in selection pool
         onProgress: (progress) => {
           setFiles(prev => prev.map(f =>
             f.id === progress.fileId

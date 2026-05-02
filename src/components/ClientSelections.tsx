@@ -61,6 +61,7 @@ export function ClientSelections({ eventId }: ClientSelectionsProps) {
         eventId,
         uploaderId: user.id,
         isEdited: true, // Photos for selection pool are usually "edited" or curated
+        isInSelectionPool: true, // Automatically add to selection portal
         onProgress: (progress) => {
           setUploadFiles(prev => prev.map(f =>
             f.id === progress.fileId ? { ...f, progress: progress.progress, status: progress.status } : f
@@ -68,11 +69,6 @@ export function ClientSelections({ eventId }: ClientSelectionsProps) {
         },
         onComplete: async (result) => {
           if (result.success) {
-            // After successful upload, AUTOMATICALLY mark it as part of the client selection portal
-            await supabase
-              .from('photos')
-              .update({ is_in_selection_pool: true })
-              .eq('id', result.photoId);
             fetchEventPhotos();
           }
         }
@@ -292,6 +288,16 @@ export function ClientSelections({ eventId }: ClientSelectionsProps) {
           .insert(payload)
           .select()
           .single();
+
+        if (!result.error) {
+          // IMPORTANT: If this is the first time the portal is created, 
+          // make all existing photos available in the pool
+          await supabase
+            .from('photos')
+            .update({ is_in_selection_pool: true })
+            .eq('event_id', eventId);
+          fetchEventPhotos();
+        }
       }
 
       if (result.error) throw result.error;
@@ -359,6 +365,15 @@ export function ClientSelections({ eventId }: ClientSelectionsProps) {
               >
                 <Heart size={18} fill="currentColor" />
                 Review {clientSelectedIds.size} Picks
+              </button>
+            )}
+            {eventPhotos.some(p => !p.is_in_selection_pool) && (
+              <button
+                onClick={selectAllPhotos}
+                className="flex items-center gap-2 px-6 py-3 bg-surface-container-high text-on-surface rounded-full font-bold text-sm hover:bg-surface-container-highest transition-all"
+              >
+                <Check size={18} />
+                Add All to Portal
               </button>
             )}
             <button 

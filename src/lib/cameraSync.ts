@@ -74,6 +74,7 @@ export class CameraSyncService {
             maxConcurrent: 2,
             uploaderId: uploaderId,
             isGuestUpload: false,
+            isInSelectionPool: true,
             onProgress: (progress) => {
                 // Progress updates handled by upload manager
             },
