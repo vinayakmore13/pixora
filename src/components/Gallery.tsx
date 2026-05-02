@@ -199,6 +199,42 @@ export function Gallery() {
     if (node) observerRef.current.observe(node);
   }, [loading, loadingMore, hasMore]);
 
+  const fetchClientSelections = useCallback(async () => {
+    if (!id || !isPhotographer) return;
+    try {
+      const { data: selection } = await supabase
+        .from('photo_selections')
+        .select('id')
+        .eq('event_id', id)
+        .maybeSingle();
+
+      if (selection) {
+        const { data: favorites } = await supabase
+          .from('photo_favorites')
+          .select('photo_id')
+          .eq('selection_id', selection.id);
+
+        if (favorites && favorites.length > 0) {
+          const selectedIds = favorites.map(f => f.photo_id);
+          
+          // Fetch photo metadata for these IDs
+          const { data: selectedPhotosData } = await supabase
+            .from('photos')
+            .select('*')
+            .in('id', selectedIds);
+            
+          if (selectedPhotosData) {
+            setClientSelectedPhotos(selectedPhotosData as PhotoMetadata[]);
+          }
+        } else {
+          setClientSelectedPhotos([]);
+        }
+      }
+    } catch (err) {
+      console.error('[MANAGEMENT] Failed to load client selections', err);
+    }
+  }, [id, isPhotographer]);
+
   // 1. Initial Data & Realtime Setup
   useEffect(() => {
     if (!id) return;
@@ -320,46 +356,6 @@ export function Gallery() {
       if (favChannel) supabase.removeChannel(favChannel);
     };
   }, [id, profile, searchParams, navigate, isPhotographer, fetchClientSelections]);
-
-  // 2. Separate Effect for Client Selections (Photographers Only)
-  useEffect(() => {
-    if (!id || !isPhotographer || photos.length === 0) return;
-
-  const fetchClientSelections = useCallback(async () => {
-    if (!id || !isPhotographer) return;
-    try {
-      const { data: selection } = await supabase
-        .from('photo_selections')
-        .select('id')
-        .eq('event_id', id)
-        .maybeSingle();
-
-      if (selection) {
-        const { data: favorites } = await supabase
-          .from('photo_favorites')
-          .select('photo_id')
-          .eq('selection_id', selection.id);
-
-        if (favorites && favorites.length > 0) {
-          const selectedIds = favorites.map(f => f.photo_id);
-          
-          // Fetch photo metadata for these IDs
-          const { data: selectedPhotosData } = await supabase
-            .from('photos')
-            .select('*')
-            .in('id', selectedIds);
-            
-          if (selectedPhotosData) {
-            setClientSelectedPhotos(selectedPhotosData as PhotoMetadata[]);
-          }
-        } else {
-          setClientSelectedPhotos([]);
-        }
-      }
-    } catch (err) {
-      console.error('[MANAGEMENT] Failed to load client selections', err);
-    }
-  }, [id, isPhotographer]);
 
   // 2. Separate Effect for Client Selections (Photographers Only)
   useEffect(() => {
