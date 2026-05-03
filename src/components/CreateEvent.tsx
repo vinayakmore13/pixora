@@ -73,6 +73,8 @@ export function CreateEvent() {
     allow_guest_uploads: true,
     moderate_guest_photos: false,
     ai_enabled: true,
+    is_password_protected: true,
+    gallery_password: Math.random().toString(36).slice(-8),
   });
   const [coverImageFile, setCoverImageFile] = useState<File | null>(null);
   const [coverImagePreview, setCoverImagePreview] = useState<string | null>(
@@ -221,6 +223,8 @@ export function CreateEvent() {
           upload_password_hash: uploadPassword,
           max_photos: formData.max_photos,
           status: "upcoming",
+          is_password_protected: formData.is_password_protected,
+          gallery_password_hash: formData.is_password_protected ? formData.gallery_password : null,
         })
         .select()
         .single();
@@ -570,6 +574,42 @@ export function CreateEvent() {
                   placeholder="A beautiful celebration of love..."
                   className="w-full bg-surface-container-low border border-outline-variant/10 rounded-xl py-3 px-4 text-on-surface placeholder:text-on-surface-variant/50 focus:ring-2 focus:ring-primary outline-none resize-none"
                 />
+              </div>
+
+              {/* Password Protection */}
+              <div className="bg-surface-container-low border border-outline-variant/10 rounded-2xl p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-on-surface font-medium">Gallery Password Protection</h3>
+                    <p className="text-on-surface-variant text-sm">Require guests to enter a password to view this gallery</p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only peer"
+                      checked={formData.is_password_protected}
+                      onChange={(e) => setFormData(prev => ({ ...prev, is_password_protected: e.target.checked }))}
+                    />
+                    <div className="w-11 h-6 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                  </label>
+                </div>
+
+                {formData.is_password_protected && (
+                  <div className="pt-4 border-t border-outline-variant/10">
+                    <label className="block text-sm font-medium text-on-surface-variant mb-2">
+                      Set Gallery Password <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      name="gallery_password"
+                      value={formData.gallery_password}
+                      onChange={handleInputChange}
+                      required={formData.is_password_protected}
+                      placeholder="e.g. RahulPriya2026"
+                      className="w-full bg-surface-container border border-outline-variant/20 rounded-xl py-3 px-4 text-on-surface placeholder:text-on-surface-variant/50 focus:ring-2 focus:ring-primary outline-none"
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Cover Image */}

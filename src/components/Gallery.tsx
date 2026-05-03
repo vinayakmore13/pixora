@@ -26,16 +26,82 @@ export function Gallery() {
   
   // Data State
   const [photos, setPhotos] = useState<PhotoMetadata[]>([]);
-  const [eventData, setEventData] = useState<{ name: string; event_date: string; user_id?: string } | null>(null);
+  const [eventData, setEventData] = useState<{ name: string; event_date: string; user_id?: string; is_password_protected?: boolean; guest_access_enabled?: boolean } | null>(null);
+
+  // Password Protection State
+  const [isPasswordVerified, setIsPasswordVerified] = useState(false);
+  const [passwordInput, setPasswordInput] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [isVerifyingPassword, setIsVerifyingPassword] = useState(false);
+
+  useEffect(() => {
+    if (id) {
+      const storedAuth = localStorage.getItem(`gallery_auth_${id}`);
+      if (storedAuth) {
+        const timestamp = parseInt(storedAuth);
+        if (!isNaN(timestamp) && Date.now() - timestamp < 5 * 60 * 1000) {
+          setIsPasswordVerified(true);
+        } else {
+          localStorage.removeItem(`gallery_auth_${id}`);
+        }
+      }
+    }
+  }, [id]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && id && isPasswordVerified) {
+        const storedAuth = localStorage.getItem(`gallery_auth_${id}`);
+        if (storedAuth) {
+          const timestamp = parseInt(storedAuth);
+          if (!isNaN(timestamp) && Date.now() - timestamp > 5 * 60 * 1000) {
+            setIsPasswordVerified(false);
+            localStorage.removeItem(`gallery_auth_${id}`);
+          } else {
+            localStorage.setItem(`gallery_auth_${id}`, Date.now().toString());
+          }
+        }
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [id, isPasswordVerified]);
+
+  const verifyPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsVerifyingPassword(true);
+    setPasswordError('');
+    
+    try {
+      const { data, error } = await supabase.rpc('verify_gallery_password', {
+        p_event_id: id,
+        p_password: passwordInput
+      });
+      
+      if (error) throw error;
+      
+      if (data === true) {
+        localStorage.setItem(`gallery_auth_${id}`, Date.now().toString());
+        setIsPasswordVerified(true);
+      } else {
+        setPasswordError('Incorrect password');
+      }
+    } catch (err) {
+      console.error('Password verification failed:', err);
+      setPasswordError('An error occurred. Please try again.');
+    } finally {
+      setIsVerifyingPassword(false);
+    }
+  };
 
   // Photographer Branding
-  const [isSecure, setIsSecure] = useState(false);
   const { branding } = usePhotographerBranding(eventData?.user_id);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const isPhotographer = React.useMemo(() => 
-    profile?.user_type === 'photographer' || profile?.is_admin || eventData?.user_id === profile?.id
+    profile?.is_admin || (profile && eventData?.user_id === profile?.id) || false
   , [profile, eventData]);
   
   // Pagination State
@@ -247,7 +313,7 @@ export function Gallery() {
         // Fetch Event Details
         const { data: event, error: eventError } = await supabase
           .from('events')
-          .select('name, event_date, user_id')
+          .select('name, event_date, user_id, is_password_protected, guest_access_enabled')
           .eq('id', id)
           .single();
         
@@ -258,6 +324,23 @@ export function Gallery() {
         }
         
         if (event) setEventData(event);
+
+        const isPhotographerUser = profile?.is_admin || (profile && event?.user_id === profile?.id) || false;
+        const storedAuth = localStorage.getItem(`gallery_auth_${id}`);
+        
+        let isAuthed = isPasswordVerified;
+        if (!isAuthed && storedAuth) {
+           const timestamp = parseInt(storedAuth);
+           if (!isNaN(timestamp) && Date.now() - timestamp < 5 * 60 * 1000) {
+             isAuthed = true;
+           }
+        }
+
+        // If password protected and not authorized, stop loading here and show password gate instantly
+        if (event?.is_password_protected && !isPhotographerUser && !isAuthed) {
+          setLoading(false);
+          return;
+        }
 
       // Fetch Selection Portal if exists
       const { data: selection } = await supabase
@@ -308,7 +391,7 @@ export function Gallery() {
 
       // Security Enforcement
       try {
-        const isPhotographerUser = profile?.user_type === 'photographer' || profile?.is_admin || event?.user_id === profile?.id;
+        const isPhotographerUser = profile?.is_admin || (profile && event?.user_id === profile?.id) || false;
         
         // Fetch Photographer Plan
         if (event?.user_id) {
@@ -336,33 +419,11 @@ export function Gallery() {
 
         // Security layers:
         // 1. Photographers / admins / event owners → full access, no security overlay
-        // 2. Logged-in clients (have a profile) → authenticated access, watermarks apply
-        // 3. Anonymous guests (no profile, no session) → redirect to password verify page
+        // 2. Clients / Guests → authenticated access, watermarks apply
         if (isPhotographerUser) {
-          setIsSecure(false);
           console.log('[SECURITY] Photographer/owner view: Full access granted.');
-        } else if (!authLoading && profile) {
-          // Logged-in client — they're authenticated via Supabase, no need for session/fp tokens
-          setIsSecure(true);
-          console.log('[SECURITY] Authenticated client view: Watermark layer active.');
-        } else if (!authLoading && !profile) {
-          // Anonymous guest — require session/fp from the verify page
-          const session = searchParams.get('session');
-          const fp = searchParams.get('fp');
-          
-          if (!session || !fp) {
-            console.warn('[SECURITY] Anonymous access without session. Redirecting to verify...');
-            navigate(`/gallery/verify?token=${id}`);
-            return;
-          }
-
-          setIsSecure(true);
-          const currentFp = await getDeviceFingerprint();
-          if (currentFp !== fp) {
-             navigate(`/gallery/verify?token=${id}&error=device_mismatch`);
-             return;
-          }
-          logSecurityEvent(session, 'page_view');
+        } else {
+          console.log('[SECURITY] Guest/Client view: Watermark layer active. Inline password gate handles auth.');
         }
       } catch (err) {
         console.error('[SECURITY] Verification failed', err);
@@ -409,7 +470,7 @@ export function Gallery() {
     return () => {
       if (favoritesSubscription) supabase.removeChannel(favoritesSubscription);
     };
-  }, [id, profile?.id, isPhotographer, fetchClientSelections, authLoading]);
+  }, [id, profile?.id, isPhotographer, fetchClientSelections, authLoading, isPasswordVerified]);
 
   useEffect(() => {
     const photosChannel = supabase
@@ -712,8 +773,58 @@ export function Gallery() {
     );
   }
 
+  if (eventData?.is_password_protected && !isPasswordVerified && !isPhotographer) {
+    return (
+      <div className="min-h-screen bg-[#0a0a0a] text-white flex flex-col items-center justify-center p-8 text-center font-serif relative overflow-hidden">
+        <div className="absolute inset-0 bg-black/60 backdrop-blur-2xl z-0"></div>
+        
+        <div className="relative z-10 max-w-md w-full space-y-8 animate-in fade-in zoom-in duration-500 bg-white/5 p-12 rounded-[3rem] border border-white/10 shadow-2xl">
+          <div className="w-24 h-24 bg-primary/20 rounded-[2.5rem] flex items-center justify-center mx-auto mb-4 border border-primary/20 shadow-2xl shadow-primary/20">
+            <ShieldCheck size={48} className="text-primary" />
+          </div>
+          <div className="space-y-4">
+            <h1 className="text-3xl font-bold tracking-tight">Protected Gallery</h1>
+            <p className="text-white/60 leading-relaxed text-sm">
+              Please enter the password provided by your photographer to view this gallery.
+            </p>
+          </div>
+          
+          <form onSubmit={verifyPassword} className="space-y-4 pt-4">
+            <div>
+              <input 
+                type="password"
+                value={passwordInput}
+                onChange={e => setPasswordInput(e.target.value)}
+                placeholder="Enter Password"
+                className="w-full bg-black/50 border border-white/10 rounded-full px-6 py-4 text-center focus:outline-none focus:border-primary transition-colors tracking-widest font-mono"
+                autoFocus
+              />
+              {passwordError && (
+                <p className="text-red-500 text-xs font-bold mt-3 uppercase tracking-widest">{passwordError}</p>
+              )}
+            </div>
+            <button 
+              type="submit"
+              disabled={isVerifyingPassword || !passwordInput}
+              className="w-full signature-gradient text-white py-4 rounded-full font-bold uppercase tracking-widest text-xs hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isVerifyingPassword ? 'Verifying...' : 'Access Gallery'}
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white pt-24 pb-20 px-8 no-screenshot">
+    <div 
+      className="min-h-screen bg-[#0a0a0a] text-white pt-24 pb-20 px-8 no-screenshot"
+      style={{
+        '--color-primary': branding?.brand_color_primary || '#ae2f34',
+        '--color-secondary': branding?.brand_color_secondary || '#1A1F3A',
+        '--color-primary-container': branding?.brand_color_primary ? branding.brand_color_primary : '#ff6b6b',
+      } as React.CSSProperties}
+    >
       <div className="max-w-full mx-auto relative pb-24">
         {/* Gallery Header */}
         <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
@@ -857,11 +968,11 @@ export function Gallery() {
             <p>No photos found.</p>
           </div>
         ) : (
-          <div className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-6 space-y-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {displayedPhotos.map((photo, i) => {
               const isSelected = selectedPhotoIds.has(photo.id);
               const isLastElement = i === displayedPhotos.length - 1;
-              const photoUrl = getPhotoPublicUrl(photo.file_path);
+              const photoUrl = getPhotoPublicUrl(photo.thumbnail_url || photo.file_path);
 
               return (
                 <motion.div 
@@ -870,18 +981,19 @@ export function Gallery() {
                   initial={{ opacity: 0, y: 20 }}
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
-                  onClick={() => isSelectionMode ? toggleSelection(photo.id, { stopPropagation: () => {} } as any) : setSelectedPhotoIndex(i)}
+                  onClick={() => isSelectionMode ? toggleSelection(photo.id, { stopPropagation: () => {} } as any) : (isPhotographer ? setSelectedPhotoIndex(i) : undefined)}
                   className={cn(
-                    "relative group rounded-2xl overflow-hidden break-inside-avoid cursor-pointer transition-all",
+                    "relative group rounded-2xl overflow-hidden break-inside-avoid transition-all aspect-[3/2] bg-surface-container",
+                    (isSelectionMode || isPhotographer) ? "cursor-pointer" : "",
                     isSelected ? "ring-4 ring-primary scale-[0.98]" : ""
                   )}
                 >
-                  <div className="relative">
+                  <div className="relative w-full h-full">
                     {isPhotographer ? (
                       <img 
                         src={photoUrl} 
                         alt={photo.file_name} 
-                        className="w-full h-auto transition-transform duration-700 group-hover:scale-105" 
+                        className="w-full h-full object-cover transition-transform duration-700" 
                         loading="lazy"
                         onError={() => handleImageError(photo.id)}
                       />
@@ -889,21 +1001,17 @@ export function Gallery() {
                       <SecureImage
                         src={photoUrl}
                         alt={photo.file_name}
-                        className="w-full h-auto transition-transform duration-700 group-hover:scale-105"
-                        isProtected={isSecure}
+                        className="w-full h-full object-cover transition-transform duration-700"
+                        isProtected={!isPhotographer}
                         watermarkText={profile?.email || 'GUEST'}
+                        branding={branding || undefined}
                         onError={() => handleImageError(photo.id)}
                       />
                     )}
                     
-                    {!isSecure && (
+                    {!isPhotographer && (
                       <div className="absolute top-4 right-4 z-10 flex flex-col gap-2">
-                        <button 
-                          onClick={(e) => handleSingleDownload(photo, e)}
-                          className="p-2 bg-white/10 backdrop-blur-md rounded-full hover:bg-primary transition-colors text-white"
-                        >
-                          <Download size={18} />
-                        </button>
+                        {/* Removed single download button as per request */}
                         
                         {/* Favorite Button for Guests */}
                         {selectionData && !isPhotographer && (
@@ -947,14 +1055,7 @@ export function Gallery() {
 
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 p-6 flex flex-col justify-between">
                     <div className="flex justify-end gap-2">
-                      {!isSelectionMode && !isSecure && (
-                        <button 
-                          onClick={(e) => handleSingleDownload(photo, e)}
-                          className="p-2 bg-white/10 backdrop-blur-md rounded-full hover:bg-primary transition-colors"
-                        >
-                          <Download size={18} />
-                        </button>
-                      )}
+                      {/* Removed single download button */}
                     </div>
                     <div className="flex justify-between items-end">
                       <div>
@@ -993,14 +1094,7 @@ export function Gallery() {
                 {selectedPhotoIndex + 1} / {displayedPhotos.length}
               </div>
               <div className="flex gap-4">
-                {!isSecure ? (
-                  <button 
-                    onClick={(e) => handleSingleDownload(displayedPhotos[selectedPhotoIndex], e)}
-                    className="p-2 hover:bg-white/10 rounded-full transition-colors"
-                  >
-                    <Download size={24} />
-                  </button>
-                ) : (
+                {!isPhotographer ? null : (
                   <div className="flex items-center gap-2 px-3 py-1 bg-primary/20 text-primary rounded-full border border-primary/30">
                     <ShieldCheck size={14} />
                     <span className="text-[10px] font-bold uppercase tracking-widest">Protected</span>
@@ -1041,17 +1135,18 @@ export function Gallery() {
               <div className="relative w-full h-full flex items-center justify-center">
                 {isPhotographer ? (
                   <img 
-                    src={getPhotoPublicUrl(displayedPhotos[selectedPhotoIndex].file_path)} 
+                    src={getPhotoPublicUrl(displayedPhotos[selectedPhotoIndex].thumbnail_url || displayedPhotos[selectedPhotoIndex].file_path)} 
                     alt="Selected" 
                     className="max-h-[85vh] max-w-full object-contain"
                   />
                 ) : (
                   <SecureImage 
-                    src={getPhotoPublicUrl(displayedPhotos[selectedPhotoIndex].file_path)} 
+                    src={getPhotoPublicUrl(displayedPhotos[selectedPhotoIndex].thumbnail_url || displayedPhotos[selectedPhotoIndex].file_path)} 
                     alt="Selected" 
-                    className="max-h-[85vh] max-w-full"
-                    isProtected={isSecure}
+                    className="max-h-[85vh] max-w-[90vw] object-contain"
+                    isProtected={!isPhotographer}
                     watermarkText={`${profile?.email || 'GUEST'}-${id}`}
+                    branding={branding || undefined}
                   />
                 )}
               </div>
@@ -1154,7 +1249,7 @@ export function Gallery() {
                     <div className="grid grid-cols-3 gap-2">
                        {matchedPhotos.slice(0, 3).map((photo, i) => (
                         <div key={i} className="aspect-square rounded-xl overflow-hidden relative">
-                          <img src={getPhotoPublicUrl(photo.file_path)} alt="Found" className="w-full h-full object-cover grayscale opacity-50" />
+                          <img src={getPhotoPublicUrl(photo.thumbnail_url || photo.file_path)} alt="Found" className="w-full h-full object-cover grayscale opacity-50" />
                           {!isAIUnlocked && (
                              <div className="absolute inset-0 flex items-center justify-center">
                                <ShieldCheck size={20} className="text-white/40" />
@@ -1259,18 +1354,20 @@ export function Gallery() {
                 {selectedPhotoIds.size === displayedPhotos.length ? 'Deselect All' : 'Select All'}
               </button>
 
-              <button 
-                onClick={handleBulkDownload}
-                disabled={isDownloadingZip}
-                className="signature-gradient px-6 py-2 rounded-full font-bold text-sm shadow-lg shadow-primary/20 hover:brightness-110 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-50"
-              >
-                {isDownloadingZip ? (
-                  <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
-                ) : (
-                  <Download size={18} />
-                )}
-                {isDownloadingZip ? 'Preparing ZIP...' : 'Download High-Res ZIP'}
-              </button>
+              {isPhotographer && (
+                <button 
+                  onClick={handleBulkDownload}
+                  disabled={isDownloadingZip}
+                  className="signature-gradient px-6 py-2 rounded-full font-bold text-sm shadow-lg shadow-primary/20 hover:brightness-110 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-50"
+                >
+                  {isDownloadingZip ? (
+                    <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
+                  ) : (
+                    <Download size={18} />
+                  )}
+                  {isDownloadingZip ? 'Preparing ZIP...' : 'Download High-Res ZIP'}
+                </button>
+              )}
 
               <div className="h-8 w-px bg-white/10 mx-2" />
             </div>

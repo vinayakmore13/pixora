@@ -33,6 +33,7 @@ export function WatermarkedImage({
   className = '',
   onClick,
   children,
+  onError,
 }: WatermarkedImageProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);

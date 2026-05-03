@@ -2,6 +2,7 @@ import { AlertCircle, CheckCircle2, Clock, Trash2, Upload, X } from 'lucide-reac
 import React from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useLayout } from '../contexts/LayoutContext';
 import { formatFileSize, getCompressionRatio } from '../lib/imageCompression';
 import { supabase } from '../lib/supabaseClient';
 import { UploadFile, UploadManager } from '../lib/uploadManager';
@@ -9,6 +10,7 @@ import { cn } from '../lib/utils';
 
 export function UploadPhotos() {
   const { user, profile } = useAuth();
+  const { isSidebarOpen, setIsSidebarOpen, isDesktopCollapsed } = useLayout();
   const [searchParams] = useSearchParams();
   const eventIdFromUrl = searchParams.get('event');
   
@@ -69,17 +71,18 @@ export function UploadPhotos() {
         eventId: selectedEventId,
         eventName: selectedEventName,
         photographerName: profile?.full_name || profile?.studio_name || user.email || 'photographer',
-        maxConcurrent: 3,
+        maxConcurrent: 50,
         uploaderId: user.id,
         isGuestUpload: false,
         isEdited: uploadType === 'edited',
         isInSelectionPool: true, // By default, photographer uploads should be in selection pool
         onProgress: (progress) => {
-          setFiles(prev => prev.map(f =>
-            f.id === progress.fileId
-              ? { ...f, progress: progress.progress, status: progress.status, error: progress.error }
-              : f
-          ));
+          // Use ref-based throttling for high-frequency progress updates
+          fileUpdatesRef.current[progress.fileId] = { 
+            progress: progress.progress, 
+            status: progress.status, 
+            error: progress.error 
+          };
         },
         onComplete: (result) => {
           if (!result.success) {
@@ -95,6 +98,19 @@ export function UploadPhotos() {
     }
   }, [selectedEventId, user, uploadType]);
 
+  // Throttled UI updates to prevent lag during mass uploads
+  const fileUpdatesRef = React.useRef<Record<string, Partial<UploadFile>>>({});
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      if (Object.keys(fileUpdatesRef.current).length > 0) {
+        const updates = { ...fileUpdatesRef.current };
+        fileUpdatesRef.current = {};
+        setFiles(prev => prev.map(f => updates[f.id] ? { ...f, ...updates[f.id] } : f));
+      }
+    }, 250); // Update UI 4 times per second (smooth enough, much more efficient)
+    return () => clearInterval(interval);
+  }, []);
+
   // Handle file selection
   const handleFileSelect = (selectedFiles: FileList | null) => {
     if (!selectedFiles || !uploadManager) return;
@@ -107,6 +123,9 @@ export function UploadPhotos() {
 
     const newUploadFiles = uploadManager.addFiles(imageFiles);
     setFiles(prev => [...prev, ...newUploadFiles]);
+    
+    // Start background pre-compression immediately
+    uploadManager.preCompress();
   };
 
   // Handle drag events
@@ -194,7 +213,7 @@ export function UploadPhotos() {
     : 0;
 
   return (
-    <div className="min-h-screen bg-surface flex pt-20">
+    <div className="min-h-screen bg-surface flex pt-20 overflow-x-hidden">
       {/* Hidden file input */}
       <input
         ref={fileInputRef}
@@ -205,9 +224,21 @@ export function UploadPhotos() {
         className="hidden"
       />
 
-      {/* Sidebar Controls */}
-      <aside className="w-80 fixed left-0 top-20 bottom-0 bg-white border-r border-outline-variant/10 p-8 hidden lg:block">
-        <div className="space-y-10">
+      {/* Backdrop for mobile sidebar */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/20 backdrop-blur-sm z-30 lg:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar Controls — toggleable on all devices */}
+      <aside className={cn(
+        "w-72 lg:w-80 fixed left-0 top-20 bottom-0 bg-white border-r border-outline-variant/10 p-6 lg:p-8 z-40 transition-all duration-300 ease-in-out overflow-y-auto",
+        isSidebarOpen ? "translate-x-0" : "-translate-x-full",
+        isDesktopCollapsed ? "lg:-translate-x-full" : "lg:translate-x-0"
+      )}>
+        <div className="space-y-8">
           <div>
             <h2 className="text-2xl font-serif font-bold text-on-surface mb-6">Upload Photos</h2>
             <div className="space-y-4">
@@ -292,12 +323,7 @@ export function UploadPhotos() {
             <div className="space-y-3">
               <SummaryItem label="Total Files" value={stats.total.toString()} />
               <SummaryItem label="Total Size" value={formatFileSize(stats.totalSize)} />
-              {stats.compressedSize > 0 && stats.compressedSize < stats.totalSize && (
-                <SummaryItem
-                  label="Compressed"
-                  value={`${formatFileSize(stats.compressedSize)} (${getCompressionRatio(stats.totalSize, stats.compressedSize)}% saved)`}
-                />
-              )}
+
               <SummaryItem label="Completed" value={`${stats.completed}/${stats.total}`} />
             </div>
             <div className="mt-6 pt-6 border-t border-outline-variant/10">
@@ -314,7 +340,7 @@ export function UploadPhotos() {
             </div>
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-4 pb-8">
             <button
               onClick={handleStartUpload}
               disabled={isUploading || files.length === 0 || stats.pending === 0}
@@ -334,7 +360,10 @@ export function UploadPhotos() {
       </aside>
 
       {/* Main Upload Area */}
-      <main className="flex-1 lg:ml-80 p-8">
+      <main className={cn(
+        "flex-1 p-4 md:p-8 transition-all duration-300",
+        isDesktopCollapsed ? "lg:ml-0" : "lg:ml-80"
+      )}>
         <div className="max-w-5xl mx-auto space-y-8">
           {/* Dropzone */}
           <div
@@ -402,11 +431,7 @@ export function UploadPhotos() {
                             </div>
                             <div>
                               <span className="text-sm font-bold text-on-surface">{file.file.name}</span>
-                              {file.compressedSize && file.compressedSize < file.originalSize && (
-                                <p className="text-xs text-on-surface-variant">
-                                  Compressed: {formatFileSize(file.compressedSize)} ({getCompressionRatio(file.originalSize, file.compressedSize)}% saved)
-                                </p>
-                              )}
+
                             </div>
                           </div>
                         </td>

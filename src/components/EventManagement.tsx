@@ -149,13 +149,7 @@ export function EventManagement() {
     }
   };
 
-  const handleCopyPassword = () => {
-    if (event) {
-      navigator.clipboard.writeText(event.upload_password_hash);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
+
 
   const handleDelete = async () => {
     if (!event) return;
@@ -397,7 +391,7 @@ export function EventManagement() {
 
   // Photographer View (Full Edit Access)
   return (
-    <div className="min-h-screen bg-surface pt-24 pb-20 px-8">
+    <div className="min-h-screen bg-surface pt-24 pb-20 px-4 md:px-8">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
@@ -448,33 +442,33 @@ export function EventManagement() {
               • {event.location || "Location TBD"}
             </p>
           </div>
-          <div className="flex gap-4">
+          <div className="flex flex-wrap gap-3">
             <Link
               to={`/upload?event=${event.id}`}
-              className="bg-white border border-outline-variant/20 text-on-surface px-6 py-3 rounded-full font-bold flex items-center gap-2 hover:bg-surface-container-low transition-all"
+              className="bg-white border border-outline-variant/20 text-on-surface px-5 py-2.5 rounded-full font-bold flex items-center gap-2 hover:bg-surface-container-low transition-all text-sm"
             >
-              <Upload size={18} />
-              Upload Photos
+              <Upload size={16} />
+              Upload
             </Link>
             <Link
               to={`/gallery/${event.id}`}
-              className="signature-gradient text-white px-6 py-3 rounded-full font-bold flex items-center gap-2 shadow-lg shadow-primary/20 hover:brightness-110 active:scale-95 transition-all"
+              className="signature-gradient text-white px-5 py-2.5 rounded-full font-bold flex items-center gap-2 shadow-lg shadow-primary/20 hover:brightness-110 active:scale-95 transition-all text-sm"
             >
-              <LayoutGrid size={18} />
-              View Gallery
+              <LayoutGrid size={16} />
+              Gallery
             </Link>
             <Link
               to={`/event/${event.id}/edit`}
-              className="bg-white border border-outline-variant/20 text-on-surface px-6 py-3 rounded-full font-bold flex items-center gap-2 hover:bg-surface-container-low transition-all"
+              className="bg-white border border-outline-variant/20 text-on-surface px-5 py-2.5 rounded-full font-bold flex items-center gap-2 hover:bg-surface-container-low transition-all text-sm"
             >
-              <Edit3 size={18} />
-              Edit Details
+              <Edit3 size={16} />
+              Edit
             </Link>
             <button
               onClick={() => setShowDeleteModal(true)}
-              className="bg-red-50 border border-red-200 text-red-600 px-6 py-3 rounded-full font-bold flex items-center gap-2 hover:bg-red-100 transition-all hidden md:flex"
+              className="bg-red-50 border border-red-200 text-red-600 px-5 py-2.5 rounded-full font-bold flex items-center gap-2 hover:bg-red-100 transition-all text-sm"
             >
-              <Trash2 size={18} />
+              <Trash2 size={16} />
               Delete
             </button>
           </div>
@@ -546,25 +540,6 @@ export function EventManagement() {
                   </div>
                 </div>
 
-                {/* Password Access */}
-                <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Access Password</label>
-                  <div className="bg-surface-container-low rounded-2xl p-4 flex items-center gap-3 border border-outline-variant/10">
-                    <div className="flex-1 text-lg font-mono font-bold text-primary tracking-wider">
-                      {event.upload_password_hash}
-                    </div>
-                    <button
-                      onClick={handleCopyPassword}
-                      className="p-2 bg-white rounded-xl text-on-surface-variant hover:text-primary transition-all active:scale-90"
-                    >
-                      {copied ? <Check size={16} className="text-green-600" /> : <Copy size={16} />}
-                    </button>
-                  </div>
-                  <p className="text-[10px] text-on-surface-variant font-medium mt-2 flex items-center gap-1">
-                    <Lock size={10} />
-                    This password is required for clients to view the gallery.
-                  </p>
-                </div>
 
                 <div className="pt-6">
                   <Link

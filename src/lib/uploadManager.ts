@@ -43,7 +43,7 @@ export class UploadManager {
   private files: Map<string, UploadFile> = new Map();
   private uploadQueue: string[] = [];
   private activeUploads: number = 0;
-  private maxConcurrent: number = 3;
+  private maxConcurrent: number = 50;
   private onProgress?: ProgressCallback;
   private onComplete?: CompleteCallback;
   private eventId?: string;
@@ -76,7 +76,7 @@ export class UploadManager {
   ) {
     this.eventId = options.eventId;
     this.fastSelectionId = options.fastSelectionId;
-    this.maxConcurrent = options.maxConcurrent ?? 3;
+    this.maxConcurrent = options.maxConcurrent ?? 50;
     this.sessionToken = options.sessionToken;
     this.uploaderId = options.uploaderId;
     this.isGuestUpload = options.isGuestUpload ?? false;
@@ -113,6 +113,58 @@ export class UploadManager {
     }
 
     return uploadFiles;
+  }
+
+  /**
+   * Start pre-compressing files in the background
+   */
+  async preCompress(): Promise<void> {
+    if (this.skipCompression) return;
+
+    const pendingFiles = Array.from(this.files.values()).filter(
+      f => f.status === 'pending' && !f.compressedFile
+    );
+
+    // Process a few at a time to not freeze UI
+    const CHUNK_SIZE = 2;
+    for (let i = 0; i < pendingFiles.length; i += CHUNK_SIZE) {
+      const chunk = pendingFiles.slice(i, i + CHUNK_SIZE);
+      await Promise.all(chunk.map(async (uploadFile) => {
+        try {
+          if (uploadFile.status !== 'pending') return;
+          
+          uploadFile.status = 'compressing';
+          this.onProgress?.({
+            fileId: uploadFile.id,
+            progress: 10,
+            status: 'compressing',
+          });
+
+          const dims = await getImageDimensions(uploadFile.file);
+          uploadFile.width = dims.width;
+          uploadFile.height = dims.height;
+
+          const compressed = await compressImage(uploadFile.file, {
+            maxWidth: 2560,
+            maxHeight: 2560,
+            quality: 0.85,
+          });
+          uploadFile.compressedFile = compressed.file;
+          uploadFile.compressedSize = compressed.compressedSize;
+          uploadFile.width = compressed.width;
+          uploadFile.height = compressed.height;
+
+          uploadFile.status = 'pending';
+          this.onProgress?.({
+            fileId: uploadFile.id,
+            progress: 0,
+            status: 'pending',
+          });
+        } catch (e) {
+          console.warn("Pre-compression failed for", uploadFile.file.name, e);
+        }
+      }));
+    }
   }
 
   /**
@@ -215,38 +267,53 @@ export class UploadManager {
    */
   private async uploadFile(uploadFile: UploadFile): Promise<void> {
     try {
-      if (this.skipCompression) {
-        // Skip compression, just get dimensions
-        const dims = await getImageDimensions(uploadFile.file);
-        uploadFile.compressedFile = uploadFile.file;
-        uploadFile.compressedSize = uploadFile.file.size;
-        uploadFile.width = dims.width;
-        uploadFile.height = dims.height;
-      } else {
-        const compressed = await compressImage(uploadFile.file, {
-          maxWidth: 2048,
-          maxHeight: 2048,
-          quality: 0.85,
+      // 2. Client-side compression (if not already pre-compressed)
+      if (!uploadFile.compressedFile && !this.skipCompression) {
+        uploadFile.status = 'compressing';
+        this.onProgress?.({
+          fileId: uploadFile.id,
+          progress: 10,
+          status: 'compressing',
         });
 
+        const compressed = await compressImage(uploadFile.file, {
+          maxWidth: 2560,
+          maxHeight: 2560,
+          quality: 0.85,
+        });
         uploadFile.compressedFile = compressed.file;
         uploadFile.compressedSize = compressed.compressedSize;
         uploadFile.width = compressed.width;
         uploadFile.height = compressed.height;
       }
 
-      // Step 2: Upload to Supabase Storage
+      // 3. Final check for dimensions (e.g. if skipCompression is true)
+      if (!uploadFile.width || !uploadFile.height) {
+        const dims = await getImageDimensions(uploadFile.file);
+        uploadFile.width = dims.width;
+        uploadFile.height = dims.height;
+      }
+
+      // Update UI immediately to maintain illusion of fast upload
       uploadFile.status = 'uploading';
-      uploadFile.progress = 10;
+      uploadFile.progress = 15;
       this.onProgress?.({
         fileId: uploadFile.id,
-        progress: 10,
+        progress: 15,
         status: 'uploading',
       });
 
-      const filePath = await this.uploadToStorage(uploadFile);
+      const uploadedPath = await this.uploadToStorage(uploadFile.compressedFile || uploadFile.file, false);
 
-      // Step 3: Save metadata to database
+      // Simulate remaining progress
+      uploadFile.progress = 85;
+      this.onProgress?.({
+        fileId: uploadFile.id,
+        progress: 85,
+        status: 'uploading',
+      });
+
+      // 4. Save metadata to database
       uploadFile.status = 'saving';
       uploadFile.progress = 90;
       this.onProgress?.({
@@ -255,29 +322,10 @@ export class UploadManager {
         status: 'saving',
       });
 
-      const photoId = await this.savePhotoMetadata(uploadFile, filePath);
+      // Pass the uploaded path for both original and preview since we only have one optimized version
+      const photoId = await this.savePhotoMetadata(uploadFile, uploadedPath, uploadedPath);
 
-      // Step 3.5: Client-side AI face indexing (Instant)
-      try {
-        const img = new Image();
-        img.src = URL.createObjectURL(uploadFile.file);
-        await new Promise((resolve) => {
-          img.onload = resolve;
-        });
-        await faceEngine.extractAndStoreFaces(img, photoId, this.eventId || '', !!this.fastSelectionId);
-        URL.revokeObjectURL(img.src);
-      } catch (faceErr) {
-        console.error("Browser-side AI face indexing failed:", faceErr);
-      } finally {
-        if (!this.fastSelectionId) {
-          await supabase
-            .from('photos')
-            .update({ processing_status: 'ready' })
-            .eq('id', photoId);
-        }
-      }
-
-      // Step 4: Complete
+      // 5. Complete Upload Immediately (Instant feedback)
       uploadFile.status = 'completed';
       uploadFile.progress = 100;
       this.onProgress?.({
@@ -291,6 +339,29 @@ export class UploadManager {
         fileId: uploadFile.id,
         photoId,
       });
+
+      // 6. Background Client-side AI face indexing (Non-blocking)
+      // We don't await this so the next upload can start immediately
+      (async () => {
+        try {
+          const img = new Image();
+          img.src = URL.createObjectURL(uploadFile.file);
+          await new Promise((resolve) => {
+            img.onload = resolve;
+          });
+          await faceEngine.extractAndStoreFaces(img, photoId, this.eventId || '', !!this.fastSelectionId);
+          URL.revokeObjectURL(img.src);
+
+          if (!this.fastSelectionId) {
+            await supabase
+              .from('photos')
+              .update({ processing_status: 'ready' })
+              .eq('id', photoId);
+          }
+        } catch (faceErr) {
+          console.error("Browser-side AI face indexing failed:", faceErr);
+        }
+      })();
     } catch (error) {
       uploadFile.status = 'error';
       uploadFile.error = (error as Error).message;
@@ -310,10 +381,9 @@ export class UploadManager {
   }
 
   /**
-   * Upload file to Supabase Storage
+   * Upload file to Azure Storage
    */
-  private async uploadToStorage(uploadFile: UploadFile): Promise<string> {
-    const file = uploadFile.compressedFile || uploadFile.file;
+  private async uploadToStorage(file: File, isPreview: boolean = false): Promise<string> {
     const fileExt = file.name.split('.').pop();
     
     // Construct hierarchical path: Photographer/Event/Type/Filename
@@ -321,24 +391,15 @@ export class UploadManager {
     const eName = this.eventName ? slugify(this.eventName) : (this.eventId || 'unknown');
     const folder = this.eventId ? `events/${this.eventId}` : `selections/${this.fastSelectionId}`;
     
-    // Final structure: photographer/event/type/folder/timestamp-random.ext
-    const fileName = `${pName}/${eName}/${folder}/${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
+    const prefix = isPreview ? 'preview-' : 'original-';
+    
+    // Final structure: photographer/event/folder/prefix-timestamp-random.ext
+    const fileName = `${pName}/${eName}/${folder}/${prefix}${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
 
     const result = await azureStorageProvider.uploadFile(file, fileName, 'photos');
     
     if (!result.success) {
       throw new Error(`Azure Upload failed: ${result.error}`);
-    }
-
-    // Simulate progress for upload (since Supabase doesn't provide progress)
-    for (let progress = 10; progress <= 85; progress += 5) {
-      uploadFile.progress = progress;
-      this.onProgress?.({
-        fileId: uploadFile.id,
-        progress,
-        status: 'uploading',
-      });
-      await new Promise(resolve => setTimeout(resolve, 50));
     }
 
     return fileName;
@@ -347,8 +408,8 @@ export class UploadManager {
   /**
    * Save photo metadata to database
    */
-  private async savePhotoMetadata(uploadFile: UploadFile, filePath: string): Promise<string> {
-    const file = uploadFile.compressedFile || uploadFile.file;
+  private async savePhotoMetadata(uploadFile: UploadFile, originalPath: string, previewPath: string): Promise<string> {
+    const file = uploadFile.file;
 
     const { data, error } = await supabase
       .from(this.fastSelectionId ? 'fast_selection_photos' : 'photos')
@@ -357,8 +418,9 @@ export class UploadManager {
         uploader_id: this.uploaderId || null,
         upload_session_id: this.sessionToken || null,
         file_name: file.name,
-        file_path: filePath,
-        file_size: uploadFile.compressedSize || uploadFile.originalSize,
+        file_path: originalPath,
+        thumbnail_url: previewPath,
+        file_size: uploadFile.originalSize, // Store original full-res size
         file_type: file.type,
         width: uploadFile.width || 0,
         height: uploadFile.height || 0,

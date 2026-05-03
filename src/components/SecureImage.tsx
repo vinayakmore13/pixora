@@ -8,9 +8,10 @@ interface SecureImageProps {
   watermarkText?: string;
   isProtected?: boolean;
   onError?: () => void;
+  branding?: any;
 }
 
-export function SecureImage({ src, alt, className, watermarkText, isProtected = true, onError }: SecureImageProps) {
+export function SecureImage({ src, alt, className, watermarkText, isProtected = true, onError, branding }: SecureImageProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -58,16 +59,59 @@ export function SecureImage({ src, alt, className, watermarkText, isProtected = 
         injectInvisibleWatermark(ctx, canvas.width, canvas.height, watermarkText);
       }
 
-      // Visible Tiled Watermark
+      // Visible Watermark Based on Branding
       ctx.save();
-      ctx.globalAlpha = 0.08;
+      
+      const wmOpacity = branding?.watermark_opacity ? branding.watermark_opacity / 100 : 0.08;
+      // Use studio name if set, fallback to guest email, fallback to PIXVORA
+      const wmText = branding?.studio_name || watermarkText || 'PIXVORA PROTECTED';
+      
+      ctx.globalAlpha = wmOpacity;
       ctx.fillStyle = '#FFFFFF';
-      ctx.font = 'bold 24px Inter, sans-serif';
-      ctx.rotate(-Math.PI / 4);
-      for (let i = -canvas.width; i < canvas.width * 2; i += 200) {
-        for (let j = -canvas.height; j < canvas.height * 2; j += 100) {
-          ctx.fillText('PIXVORA PROTECTED', i, j);
-        }
+      
+      // Handle size relative to the canvas width so it's always visible regardless of resolution
+      let fontSizeScale = 0.03; // Default 3% of width
+      if (branding?.watermark_size === 'small') fontSizeScale = 0.015;
+      if (branding?.watermark_size === 'large') fontSizeScale = 0.06;
+      
+      const fontSize = Math.max(14, canvas.width * fontSizeScale);
+      ctx.font = `bold ${fontSize}px Inter, sans-serif`;
+
+      const drawWatermark = (x: number, y: number) => {
+        // Shadow for visibility
+        ctx.shadowColor = 'rgba(0,0,0,0.5)';
+        ctx.shadowBlur = 4;
+        ctx.fillText(wmText, x, y);
+      };
+
+      if (branding?.watermark_position === 'center') {
+         ctx.textAlign = 'center';
+         ctx.textBaseline = 'middle';
+         drawWatermark(canvas.width / 2, canvas.height / 2);
+      } else if (branding?.watermark_position === 'top_left') {
+         ctx.textAlign = 'left';
+         ctx.textBaseline = 'top';
+         drawWatermark(20, 20);
+      } else if (branding?.watermark_position === 'top_right') {
+         ctx.textAlign = 'right';
+         ctx.textBaseline = 'top';
+         drawWatermark(canvas.width - 20, 20);
+      } else if (branding?.watermark_position === 'bottom_left') {
+         ctx.textAlign = 'left';
+         ctx.textBaseline = 'bottom';
+         drawWatermark(20, canvas.height - 20);
+      } else if (branding?.watermark_position === 'bottom_right') {
+         ctx.textAlign = 'right';
+         ctx.textBaseline = 'bottom';
+         drawWatermark(canvas.width - 20, canvas.height - 20);
+      } else {
+         // Default tiled
+         ctx.rotate(-Math.PI / 4);
+         for (let i = -canvas.width; i < canvas.width * 2; i += 200) {
+           for (let j = -canvas.height; j < canvas.height * 2; j += 100) {
+             drawWatermark(i, j);
+           }
+         }
       }
       ctx.restore();
 
@@ -109,7 +153,7 @@ export function SecureImage({ src, alt, className, watermarkText, isProtected = 
       cancelAnimationFrame(animationFrame);
       clearInterval(focusCheck);
     };
-  }, [src, isProtected, watermarkText, isBlackout]);
+  }, [src, isProtected, watermarkText, isBlackout, branding]);
 
   if (!isProtected) {
     return <img src={src} alt={alt} className={className} onError={onError} />;

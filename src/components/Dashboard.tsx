@@ -334,9 +334,11 @@ export function Dashboard() {
 }
 
 function SidebarLink({ icon, label, active = false, to = "/" }: { icon: React.ReactNode, label: string, active?: boolean, to?: string }) {
+  const { setIsSidebarOpen } = useLayout();
   return (
     <Link
       to={to}
+      onClick={() => { if (window.innerWidth < 1024) setIsSidebarOpen(false); }}
       className={cn(
         "flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all group",
         active ? "bg-primary text-white silk-shadow" : "text-on-surface-variant hover:bg-surface-container-low hover:text-primary"
@@ -369,23 +371,26 @@ interface EventCardProps { image: string, title: string, date: string, location:
 
 const EventCard: React.FC<EventCardProps> = ({ image, title, date, location, photos, guests, status, id }) => {
   const { profile } = useAuth();
+  const navigate = useNavigate();
   return (
-    <div className="group bg-white rounded-[2.5rem] overflow-hidden silk-shadow border border-outline-variant/5 transition-all hover:-translate-y-1 duration-300 relative">
-      <Link to={`/event/${id}`} className="absolute inset-0 z-0" aria-label={title} />
+    <div 
+      className="group bg-white rounded-[2.5rem] overflow-hidden silk-shadow border border-outline-variant/5 transition-all hover:-translate-y-1 duration-300 relative cursor-pointer"
+      onClick={() => navigate(`/event/${id}`)}
+    >
       <div className="relative h-48 overflow-hidden">
         <img src={image} alt={title} loading="lazy" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" referrerPolicy="no-referrer" />
         <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest text-on-surface z-10">
           {status}
         </div>
       </div>
-      <div className="p-6 relative z-10 pointer-events-none">
-        <h3 className="text-xl font-bold text-on-surface mb-1 group-hover:text-primary transition-colors pointer-events-auto">{title}</h3>
-        <div className="flex items-center gap-2 text-on-surface-variant text-xs mb-4 pointer-events-auto">
+      <div className="p-6">
+        <h3 className="text-xl font-bold text-on-surface mb-1 group-hover:text-primary transition-colors">{title}</h3>
+        <div className="flex items-center gap-2 text-on-surface-variant text-xs mb-4">
           <Clock size={14} />
           {date} • {location}
         </div>
         <div className="flex justify-between items-center pt-4 border-t border-outline-variant/10">
-          <div className="flex gap-4 pointer-events-auto">
+          <div className="flex gap-4">
             <div className="text-center">
               <div className="text-sm font-bold text-on-surface">{photos}</div>
               <div className="text-[10px] font-bold uppercase tracking-tighter text-on-surface-variant/60">Photos</div>
@@ -395,15 +400,15 @@ const EventCard: React.FC<EventCardProps> = ({ image, title, date, location, pho
               <div className="text-[10px] font-bold uppercase tracking-tighter text-on-surface-variant/60">Guests</div>
             </div>
           </div>
-          <div className="flex items-center gap-2 pointer-events-auto">
+          <div className="flex items-center gap-2">
             {profile?.user_type === 'photographer' && (
-              <Link 
-                to={`/upload?event=${id}`}
-                className="w-10 h-10 rounded-full bg-surface-container-low flex items-center justify-center text-on-surface-variant hover:bg-primary hover:text-white transition-all shadow-sm"
+              <button
+                onClick={(e) => { e.stopPropagation(); navigate(`/upload?event=${id}`); }}
+                className="w-10 h-10 rounded-full bg-surface-container-low flex items-center justify-center text-on-surface-variant hover:bg-primary hover:text-white transition-all shadow-sm relative z-20"
                 title="Upload Photos"
               >
                 <Upload size={18} />
-              </Link>
+              </button>
             )}
             <div className="w-10 h-10 rounded-full bg-surface-container-low flex items-center justify-center text-on-surface-variant group-hover:bg-primary group-hover:text-white transition-all">
               <ChevronRight size={20} />

@@ -36,13 +36,13 @@ async function fetchAdminStats(): Promise<Stats> {
     supabase.from('bookings').select('total_amount, status').in('status', ['confirmed', 'completed']),
   ]);
 
-  const totalRevenue = (revenueData ?? []).reduce((sum: number, b: any) => sum + (b.total_amount || 0), 0);
+  const totalRevenue = (revenueData.data ?? []).reduce((sum: number, b: any) => sum + (b.total_amount || 0), 0);
 
   return {
-    total_users: totalUsers ?? 0,
-    total_photographers: totalPhotographers ?? 0,
-    total_events: totalEvents ?? 0,
-    events_this_month: eventsThisMonth ?? 0,
+    total_users: totalUsers.count ?? 0,
+    total_photographers: totalPhotographers.count ?? 0,
+    total_events: totalEvents.count ?? 0,
+    events_this_month: eventsThisMonth.count ?? 0,
     total_revenue: totalRevenue,
     platform_commission: Math.round(totalRevenue * 0.15),
   };
@@ -215,7 +215,7 @@ export function AdminDashboard() {
               <div className="flex items-center justify-between pb-4 border-b border-outline-variant/10">
                 <span className="text-sm text-on-surface-variant">Users registered</span>
                 <span className="text-sm font-bold text-on-surface">
-                  {loading ? '...' : stats?.total_Users ?? 0}
+                  {loading ? '...' : stats?.total_users ?? 0}
                 </span>
               </div>
               <div className="flex items-center justify-between pb-4 border-b border-outline-variant/10">

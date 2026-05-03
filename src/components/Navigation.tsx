@@ -55,13 +55,15 @@ export function Header() {
       <nav className="fixed top-0 w-full z-50 glass-nav shadow-[0_8px_32px_rgba(0,0,0,0.05)]">
         <div className="flex justify-between items-center w-full px-8 py-4 max-w-full">
           <div className="flex items-center gap-4">
-            <button 
-              onClick={toggleSidebar}
-              className="p-2 -ml-2 text-on-surface-variant hover:text-primary transition-colors lg:hidden"
-              aria-label="Toggle Sidebar"
-            >
-              <Menu size={24} />
-            </button>
+            {(location.pathname === '/dashboard' || location.pathname.startsWith('/messages') || location.pathname.startsWith('/studio') || location.pathname.startsWith('/upload')) && (
+              <button 
+                onClick={toggleSidebar}
+                className="p-2 -ml-2 text-on-surface-variant hover:text-primary transition-colors"
+                aria-label="Toggle Sidebar"
+              >
+                <Menu size={24} />
+              </button>
+            )}
             {location.pathname !== '/dashboard' && (
               <button onClick={() => navigate(-1)} className="text-on-surface-variant hover:text-primary transition-colors">
                 <ArrowLeft size={20} />

@@ -12,6 +12,10 @@ interface UserProfile {
     selfie_descriptor?: string;
     studio_name?: string | null;
     created_at: string;
+    storage_used?: number;
+    storage_limit?: number;
+    plan_type?: string;
+    smart_shares_remaining?: number;
 }
 
 interface AuthContextType {

@@ -71,7 +71,7 @@ export class CameraSyncService {
 
         this.uploadManager = new UploadManager({
             eventId: eventId,
-            maxConcurrent: 2,
+            maxConcurrent: 50,
             uploaderId: uploaderId,
             isGuestUpload: false,
             isInSelectionPool: true,
