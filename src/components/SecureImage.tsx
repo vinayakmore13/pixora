@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { cn } from '../lib/utils';
 import { injectInvisibleWatermark } from '../lib/securityEngine';
 
 interface SecureImageProps {
@@ -34,7 +35,24 @@ export function SecureImage({ src, alt, className, watermarkText, isProtected = 
     let animationFrame: number;
     let frameCount = 0;
 
+    img.onload = () => {
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      setLoading(false);
+    };
+
+    img.onerror = () => {
+      setError(true);
+      setLoading(false);
+      onError?.();
+    };
+
     const render = () => {
+      if (!canvas.width || !canvas.height) {
+        animationFrame = requestAnimationFrame(render);
+        return;
+      }
+
       if (isBlackout) {
         ctx.fillStyle = '#000000';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -160,7 +178,7 @@ export function SecureImage({ src, alt, className, watermarkText, isProtected = 
   }
 
   return (
-    <div className="relative w-full h-full flex items-center justify-center overflow-hidden">
+    <div className={cn("relative flex items-center justify-center overflow-hidden", className)}>
       {loading && (
         <div className="absolute inset-0 flex items-center justify-center bg-white/5 animate-pulse">
           <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
@@ -172,14 +190,11 @@ export function SecureImage({ src, alt, className, watermarkText, isProtected = 
       ) : (
         <canvas
           ref={canvasRef}
-          className={className}
+          className={cn("w-full h-full", className)}
           style={{
-            maxWidth: '100%',
-            maxHeight: '100%',
-            objectFit: 'contain',
             userSelect: 'none',
             WebkitUserSelect: 'none',
-            pointerEvents: 'none', // Block all mouse interaction with the actual image
+            pointerEvents: 'none',
           }}
           onContextMenu={(e) => e.preventDefault()}
         />

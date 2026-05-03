@@ -198,7 +198,7 @@ export function Gallery() {
 
         const { error: favError } = await supabase
           .from('photo_favorites')
-          .insert(favoriteInserts);
+          .upsert(favoriteInserts, { onConflict: 'selection_id,photo_id,guest_id' });
           
         if (favError) throw favError;
 
@@ -678,11 +678,11 @@ export function Gallery() {
         setMyFavorites(prev => new Set(prev).add(photoId));
         await supabase
           .from('photo_favorites')
-          .insert({ 
+          .upsert({ 
             selection_id: selectionData.id, 
             photo_id: photoId, 
             guest_id: profile.id 
-          });
+          }, { onConflict: 'selection_id,photo_id,guest_id' });
       }
     } catch (err) {
       console.error('Favorite toggle failed:', err);
@@ -981,10 +981,9 @@ export function Gallery() {
                   initial={{ opacity: 0, y: 20 }}
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
-                  onClick={() => isSelectionMode ? toggleSelection(photo.id, { stopPropagation: () => {} } as any) : (isPhotographer ? setSelectedPhotoIndex(i) : undefined)}
+                  onClick={() => isSelectionMode ? toggleSelection(photo.id, { stopPropagation: () => {} } as any) : setSelectedPhotoIndex(i)}
                   className={cn(
-                    "relative group rounded-2xl overflow-hidden break-inside-avoid transition-all aspect-[3/2] bg-surface-container",
-                    (isSelectionMode || isPhotographer) ? "cursor-pointer" : "",
+                    "relative group rounded-2xl overflow-hidden break-inside-avoid transition-all aspect-square bg-surface-container cursor-pointer",
                     isSelected ? "ring-4 ring-primary scale-[0.98]" : ""
                   )}
                 >
@@ -993,7 +992,7 @@ export function Gallery() {
                       <img 
                         src={photoUrl} 
                         alt={photo.file_name} 
-                        className="w-full h-full object-cover transition-transform duration-700" 
+                        className="w-full h-full object-cover" 
                         loading="lazy"
                         onError={() => handleImageError(photo.id)}
                       />
@@ -1001,7 +1000,7 @@ export function Gallery() {
                       <SecureImage
                         src={photoUrl}
                         alt={photo.file_name}
-                        className="w-full h-full object-cover transition-transform duration-700"
+                        className="w-full h-full object-cover"
                         isProtected={!isPhotographer}
                         watermarkText={profile?.email || 'GUEST'}
                         branding={branding || undefined}
