@@ -22,16 +22,14 @@ export async function ensurePhotoSelectionPortal(eventId: string) {
       return { success: true, id: existing.id, isNew: false };
     }
 
-    // 2. Create new portal record
+    // 2. Create new portal record — only columns that exist in the DB
     const { data: newPortal, error: createError } = await supabase
       .from('photo_selections')
       .insert({
         event_id: eventId,
-        is_active: true,
-        selection_limit: null, // Unlimited by default
-        selected_photos: [],
-        selection_notes: '',
-        expires_at: null,
+        status: 'pending',
+        max_photos: 100,
+        selection_code: Math.random().toString(36).substring(2, 8).toUpperCase(),
       })
       .select('id')
       .single();

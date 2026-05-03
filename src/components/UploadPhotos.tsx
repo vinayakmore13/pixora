@@ -1,5 +1,6 @@
 import { AlertCircle, CheckCircle2, Clock, Trash2, Upload, X } from 'lucide-react';
 import React from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { formatFileSize, getCompressionRatio } from '../lib/imageCompression';
 import { supabase } from '../lib/supabaseClient';
@@ -8,9 +9,12 @@ import { cn } from '../lib/utils';
 
 export function UploadPhotos() {
   const { user, profile } = useAuth();
+  const [searchParams] = useSearchParams();
+  const eventIdFromUrl = searchParams.get('event');
+  
   const [files, setFiles] = React.useState<UploadFile[]>([]);
   const [events, setEvents] = React.useState<Array<{ id: string; name: string }>>([]);
-  const [selectedEventId, setSelectedEventId] = React.useState<string>('');
+  const [selectedEventId, setSelectedEventId] = React.useState<string>(eventIdFromUrl || '');
   
   // Find selected event name for organized storage
   const selectedEventName = React.useMemo(() => 
@@ -45,7 +49,7 @@ export function UploadPhotos() {
       }
 
       setEvents(data || []);
-      if (data && data.length > 0) {
+      if (data && data.length > 0 && !selectedEventId) {
         setSelectedEventId(data[0].id);
       }
     } catch (error) {

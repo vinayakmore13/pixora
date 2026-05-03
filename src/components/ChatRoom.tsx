@@ -1,4 +1,17 @@
-import { ArrowLeft, Camera, Check, CheckCheck, Plus, Send, MoreVertical, Trash2 } from 'lucide-react';
+import {
+  Camera,
+  Check,
+  CheckCheck,
+  ChevronLeft,
+  MoreVertical,
+  Send,
+  Smile,
+  Trash2,
+  Calendar,
+  ArrowLeft,
+  Plus,
+  LayoutGrid,
+} from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -336,7 +349,7 @@ export function ChatRoom() {
           <div className="flex items-center gap-2 relative">
             {isPhotographer && conversation && (
               <Link
-                to={`/create-event?client=${conversation.client_id}&conversation=${conversation.id}`}
+                to={`/create-event?client=${conversation.other_user.id}&conversation=${conversationId}`}
                 className="hidden md:flex items-center gap-2 bg-surface-container-low text-on-surface px-4 py-2 rounded-full text-sm font-bold hover:bg-outline-variant/10 transition-all active:scale-95 shadow-sm"
               >
                 <Plus size={16} /> Create Event
@@ -353,6 +366,17 @@ export function ChatRoom() {
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setShowChatMenu(false)} />
                 <div className="absolute top-12 right-0 bg-white shadow-xl border border-outline-variant/10 rounded-2xl w-48 py-2 z-50 animate-in fade-in slide-in-from-top-2">
+                  {isPhotographer && (
+                    <button 
+                      onClick={() => {
+                        setShowChatMenu(false);
+                        navigate(`/create-event?client=${conversation?.other_user?.id}&conversation=${conversationId}`);
+                      }}
+                      className="w-full text-left px-4 py-3 hover:bg-surface-container flex items-center gap-3 transition-colors text-sm font-bold text-on-surface"
+                    >
+                      <Calendar size={16} /> Create Event
+                    </button>
+                  )}
                   <button 
                     onClick={() => {
                       setShowChatMenu(false);
@@ -405,7 +429,24 @@ export function ChatRoom() {
                   )}
 
                   {/* System message */}
-                  {isSystem ? (
+                  {msg.message_type === 'event_created' ? (
+                    <div className="flex justify-center py-4">
+                      <div className="bg-white border border-outline-variant/20 rounded-[2rem] p-6 silk-shadow max-w-sm w-full text-center group transition-all hover:border-primary/30 border-b-4 border-b-primary/10">
+                        <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
+                          <Calendar size={28} className="text-primary" />
+                        </div>
+                        <h4 className="font-bold text-on-surface mb-1">{msg.metadata?.event_name || 'Event Created'}</h4>
+                        <p className="text-xs text-on-surface-variant mb-4 uppercase tracking-widest font-bold">New Gallery Ready</p>
+                        <Link 
+                          to={`/gallery/${msg.metadata?.event_id}`}
+                          className="inline-flex items-center justify-center gap-2 bg-primary text-white px-8 py-3 rounded-full text-sm font-bold shadow-lg shadow-primary/20 hover:brightness-110 transition-all active:scale-95"
+                        >
+                          <LayoutGrid size={16} />
+                          View Photos
+                        </Link>
+                      </div>
+                    </div>
+                  ) : isSystem ? (
                     <div className="flex justify-center py-2">
                       <div className="bg-primary/10 text-primary text-sm font-medium px-5 py-2 rounded-2xl max-w-md text-center">
                         {msg.content}
@@ -479,6 +520,16 @@ export function ChatRoom() {
           onSubmit={handleSend}
           className="max-w-3xl mx-auto flex items-end gap-3"
         >
+          {profile?.user_type === 'photographer' && (
+            <button
+              type="button"
+              onClick={() => navigate(`/create-event?client=${conversation?.other_user.id}&conversation=${conversationId}`)}
+              className="p-3.5 bg-surface-container-low text-on-surface-variant rounded-full hover:bg-surface-container-high transition-all active:scale-90 shrink-0 shadow-sm flex items-center justify-center group"
+              title="Create Event"
+            >
+              <Plus size={18} className="group-hover:text-primary transition-colors" />
+            </button>
+          )}
           <textarea
             ref={inputRef}
             value={newMessage}

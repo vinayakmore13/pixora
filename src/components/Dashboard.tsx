@@ -1,4 +1,4 @@
-import { Briefcase, Calendar, Camera, ChevronRight, Clock, HelpCircle, LayoutGrid, MessageCircle, Palette, Plus, Search, Settings, User } from 'lucide-react';
+import { Briefcase, Calendar, Camera, ChevronRight, Clock, HelpCircle, LayoutGrid, MessageCircle, Palette, Plus, Search, Upload, Settings, User } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -148,6 +148,7 @@ export function Dashboard() {
         <nav className="space-y-2">
           <SidebarLink icon={<LayoutGrid size={20} />} label="Dashboard" to="/dashboard" active={location.pathname === '/dashboard'} />
           <SidebarLink icon={<MessageCircle size={20} />} label="Messages" to="/messages" active={location.pathname.startsWith('/messages')} />
+          
           {profile?.user_type === 'photographer' && (
             <>
               <SidebarLink icon={<User size={20} />} label="My Profile" to={`/photographer/${user?.id}`} active={location.pathname.startsWith('/photographer/') && !location.pathname.includes('/edit')} />
@@ -173,13 +174,22 @@ export function Dashboard() {
             </p>
           </div>
           {profile?.user_type === 'photographer' ? (
-            <Link
-              to="/create-event"
-              className="signature-gradient text-white px-6 py-3 rounded-full font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary/20 active:scale-95 transition-all w-full sm:w-auto"
-            >
-              <Plus size={20} />
-              Create New Shoot
-            </Link>
+            <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+              <Link
+                to="/upload"
+                className="bg-surface-container-high text-on-surface px-8 py-3.5 rounded-full font-bold flex items-center justify-center gap-2 border border-outline-variant/10 shadow-sm active:scale-95 transition-all hover:bg-surface-container-highest w-full sm:w-auto"
+              >
+                <Upload size={20} className="text-primary" />
+                Upload Photos
+              </Link>
+              <Link
+                to="/create-event"
+                className="bg-primary text-white px-8 py-3.5 rounded-full font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary/20 active:scale-95 transition-all hover:brightness-110 w-full sm:w-auto"
+              >
+                <Plus size={20} />
+                Create New Shoot
+              </Link>
+            </div>
           ) : (
             <Link
               to="/messages"
@@ -358,22 +368,24 @@ function StatCard({ icon, label, value, sub }: { icon: React.ReactNode, label: s
 interface EventCardProps { image: string, title: string, date: string, location: string, photos: number, guests: number, status: string, id: string }
 
 const EventCard: React.FC<EventCardProps> = ({ image, title, date, location, photos, guests, status, id }) => {
+  const { profile } = useAuth();
   return (
-    <Link to={`/event/${id}`} className="group bg-white rounded-[2.5rem] overflow-hidden silk-shadow border border-outline-variant/5 transition-all hover:-translate-y-1 duration-300">
+    <div className="group bg-white rounded-[2.5rem] overflow-hidden silk-shadow border border-outline-variant/5 transition-all hover:-translate-y-1 duration-300 relative">
+      <Link to={`/event/${id}`} className="absolute inset-0 z-0" aria-label={title} />
       <div className="relative h-48 overflow-hidden">
         <img src={image} alt={title} loading="lazy" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" referrerPolicy="no-referrer" />
-        <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest text-on-surface">
+        <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest text-on-surface z-10">
           {status}
         </div>
       </div>
-      <div className="p-6">
-        <h3 className="text-xl font-bold text-on-surface mb-1 group-hover:text-primary transition-colors">{title}</h3>
-        <div className="flex items-center gap-2 text-on-surface-variant text-xs mb-4">
+      <div className="p-6 relative z-10 pointer-events-none">
+        <h3 className="text-xl font-bold text-on-surface mb-1 group-hover:text-primary transition-colors pointer-events-auto">{title}</h3>
+        <div className="flex items-center gap-2 text-on-surface-variant text-xs mb-4 pointer-events-auto">
           <Clock size={14} />
           {date} • {location}
         </div>
         <div className="flex justify-between items-center pt-4 border-t border-outline-variant/10">
-          <div className="flex gap-4">
+          <div className="flex gap-4 pointer-events-auto">
             <div className="text-center">
               <div className="text-sm font-bold text-on-surface">{photos}</div>
               <div className="text-[10px] font-bold uppercase tracking-tighter text-on-surface-variant/60">Photos</div>
@@ -383,12 +395,23 @@ const EventCard: React.FC<EventCardProps> = ({ image, title, date, location, pho
               <div className="text-[10px] font-bold uppercase tracking-tighter text-on-surface-variant/60">Guests</div>
             </div>
           </div>
-          <div className="w-10 h-10 rounded-full bg-surface-container-low flex items-center justify-center text-on-surface-variant group-hover:bg-primary group-hover:text-white transition-all">
-            <ChevronRight size={20} />
+          <div className="flex items-center gap-2 pointer-events-auto">
+            {profile?.user_type === 'photographer' && (
+              <Link 
+                to={`/upload?event=${id}`}
+                className="w-10 h-10 rounded-full bg-surface-container-low flex items-center justify-center text-on-surface-variant hover:bg-primary hover:text-white transition-all shadow-sm"
+                title="Upload Photos"
+              >
+                <Upload size={18} />
+              </Link>
+            )}
+            <div className="w-10 h-10 rounded-full bg-surface-container-low flex items-center justify-center text-on-surface-variant group-hover:bg-primary group-hover:text-white transition-all">
+              <ChevronRight size={20} />
+            </div>
           </div>
         </div>
       </div>
-    </Link>
+    </div>
   );
 }
 

@@ -9,9 +9,8 @@ export function SecureVerification() {
   const navigate = useNavigate();
   const token = searchParams.get('token');
   
-  const [step, setStep] = useState<'info' | 'otp' | 'success'>('info');
-  const [phone, setPhone] = useState('');
-  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [step, setStep] = useState<'info' | 'success'>('info');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -21,59 +20,46 @@ export function SecureVerification() {
     }
   }, [token]);
 
-  const handleSendOTP = async () => {
+  const handleVerify = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!password) return;
+
     setLoading(true);
     setError(null);
     
-    // Simulate OTP sending
-    // In production, you would call a Supabase Edge Function to send SMS via Twilio
-    setTimeout(() => {
-      setStep('otp');
-      setLoading(false);
-    }, 1500);
-  };
+    try {
+      // Fetch the event's password hash
+      const { data: event, error: fetchError } = await supabase
+        .from('events')
+        .select('upload_password_hash')
+        .eq('id', token)
+        .single();
 
-  const handleVerify = async () => {
-    setLoading(true);
-    const enteredOtp = otp.join('');
-    
-    // For demo/testing purposes, OTP is 123456
-    if (enteredOtp === '123456') {
-      try {
+      if (fetchError || !event) {
+        throw new Error('Event not found or access denied.');
+      }
+
+      // In this simplified flow, upload_password_hash is used as the plain text access password
+      if (password === event.upload_password_hash) {
         const fingerprint = await getDeviceFingerprint();
-        
-        // Create secure session in DB (Simulation if table doesn't exist yet)
         const sessionId = crypto.randomUUID();
         
         setStep('success');
         setTimeout(() => {
-          // Redirect to the actual gallery with the session
-          // We assume the token identifies the event_id
           navigate(`/gallery/${token}?session=${sessionId}&fp=${fingerprint}`);
-        }, 2000);
-      } catch (err) {
-        setError('Verification failed. Please try again.');
+        }, 1500);
+      } else {
+        setError('Incorrect password. Please try again.');
+        setPassword('');
       }
-    } else {
-      setError('Invalid code. Please try again.');
-      setOtp(['', '', '', '', '', '']);
-    }
-    setLoading(false);
-  };
-
-  const handleOtpChange = (index: number, value: string) => {
-    if (value.length > 1) return;
-    const newOtp = [...otp];
-    newOtp[index] = value;
-    setOtp(newOtp);
-    
-    if (value && index < 5) {
-      const nextInput = document.getElementById(`otp-${index + 1}`);
-      nextInput?.focus();
+    } catch (err: any) {
+      setError(err.message || 'Verification failed. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
-  if (error) {
+  if (error && !token) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center p-6 text-white font-serif">
         <div className="max-w-md w-full bg-red-500/10 border border-red-500/20 rounded-2xl p-8 text-center space-y-4">
@@ -94,67 +80,46 @@ export function SecureVerification() {
           <div className="w-16 h-16 bg-primary/20 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-primary/30">
             <Shield className="w-8 h-8 text-primary" />
           </div>
-          <h1 className="text-3xl font-bold tracking-tight">Secure Access</h1>
-          <p className="text-white/40 text-sm uppercase tracking-widest font-sans">Verification Required</p>
+          <h1 className="text-3xl font-bold tracking-tight">Secure Gallery</h1>
+          <p className="text-white/40 text-sm uppercase tracking-widest font-sans">Password Required</p>
         </div>
 
         <div className="bg-white/5 border border-white/10 rounded-3xl p-8 backdrop-blur-xl relative overflow-hidden">
           {step === 'info' && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
+            <form onSubmit={handleVerify} className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
               <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-widest text-white/40 ml-1">Phone Number</label>
+                <label className="text-xs font-bold uppercase tracking-widest text-white/40 ml-1">Event Password</label>
                 <div className="relative">
-                  <Smartphone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
                   <input 
-                    type="tel" 
-                    placeholder="+91 98765 43210"
-                    className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white focus:border-primary/50 transition-all outline-none"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
+                    type="password" 
+                    placeholder="Enter gallery password"
+                    className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white focus:border-primary/50 transition-all outline-none text-center tracking-[0.2em] font-mono"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    autoFocus
                   />
                 </div>
               </div>
-              <p className="text-[10px] text-white/30 leading-relaxed">
-                By continuing, you agree to our security policy. This gallery is protected by Pixvora Industrial Security.
-              </p>
-              <button 
-                onClick={handleSendOTP}
-                disabled={loading || !phone}
-                className="w-full py-4 bg-primary rounded-2xl text-black font-bold uppercase tracking-widest hover:brightness-110 transition-all disabled:opacity-50"
-              >
-                {loading ? 'Sending Code...' : 'Get Access Code'}
-              </button>
-            </div>
-          )}
+              
+              {error && (
+                <div className="bg-red-500/10 border border-red-500/20 text-red-500 text-[10px] uppercase tracking-widest font-bold py-2 rounded-lg text-center">
+                  {error}
+                </div>
+              )}
 
-          {step === 'otp' && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-              <div className="text-center space-y-2">
-                <p className="text-sm text-white/60">We've sent a 6-digit code to</p>
-                <p className="font-mono text-primary font-bold">{phone}</p>
-              </div>
-              <div className="flex justify-between gap-2">
-                {otp.map((digit, i) => (
-                  <input 
-                    key={i}
-                    id={`otp-${i}`}
-                    type="text"
-                    maxLength={1}
-                    className="w-12 h-14 bg-white/5 border border-white/10 rounded-xl text-center text-xl font-bold focus:border-primary transition-all outline-none"
-                    value={digit}
-                    onChange={(e) => handleOtpChange(i, e.target.value)}
-                  />
-                ))}
-              </div>
+              <p className="text-[10px] text-white/30 leading-relaxed text-center">
+                This gallery is protected. Please enter the password provided by your photographer to view the photos.
+              </p>
+              
               <button 
-                onClick={handleVerify}
-                disabled={loading || otp.some(d => !d)}
+                type="submit"
+                disabled={loading || !password}
                 className="w-full py-4 bg-primary rounded-2xl text-black font-bold uppercase tracking-widest hover:brightness-110 transition-all disabled:opacity-50"
               >
-                {loading ? 'Verifying...' : 'Verify & Enter'}
+                {loading ? 'Verifying...' : 'Unlock Gallery'}
               </button>
-              <button onClick={() => setStep('info')} className="w-full text-xs text-white/30 uppercase tracking-widest hover:text-white transition-colors">Resend Code</button>
-            </div>
+            </form>
           )}
 
           {step === 'success' && (
@@ -163,7 +128,7 @@ export function SecureVerification() {
                 <CheckCircle className="w-10 h-10 text-green-500" />
               </div>
               <div className="space-y-2">
-                <h2 className="text-2xl font-bold">Access Granted</h2>
+                <h2 className="text-2xl font-bold">Unlocked</h2>
                 <p className="text-white/40 text-sm">Initializing secure session...</p>
               </div>
             </div>

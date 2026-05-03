@@ -269,11 +269,9 @@ function AppLayout() {
           <Route
             path="/gallery/:id"
             element={
-              <ProtectedRoute>
-                <Suspense fallback={<RouteLoadingFallback />}>
-                  <Gallery />
-                </Suspense>
-              </ProtectedRoute>
+              <Suspense fallback={<RouteLoadingFallback />}>
+                <Gallery />
+              </Suspense>
             }
           />
 

@@ -79,11 +79,9 @@ export interface SelectionNotification {
  */
 export async function createSelection(params: {
   event_id: string;
-  photographer_id: string;
   max_photos: number;
   is_collaborative?: boolean;
   expires_at?: string;
-  photographer_notes?: string;
 }): Promise<SelectionConfig> {
   try {
     // Generate unique selection code
@@ -93,13 +91,9 @@ export async function createSelection(params: {
       .from('photo_selections')
       .insert({
         event_id: params.event_id,
-        photographer_id: params.photographer_id,
         selection_code,
         max_photos: params.max_photos,
-        is_collaborative: params.is_collaborative ?? true,
-        expires_at: params.expires_at,
-        photographer_notes: params.photographer_notes,
-        status: 'active',
+        status: 'pending',
       })
       .select()
       .single();

@@ -19,6 +19,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { supabase } from "../lib/supabaseClient";
 import { cn } from "../lib/utils";
 import { azureStorageProvider } from "../lib/providers/azureStorageProvider";
+import { createSelection } from "../lib/api/selections";
 
 // Generate a random QR code string (8 characters)
 function generateQRCode(): string {
@@ -254,18 +255,35 @@ export function CreateEvent() {
         upload_password: uploadPassword,
       });
 
+      // Step 3: Auto-create selection portal for the event
+      // Every event needs a portal for photographers to manage and clients to select photos
+      try {
+        await createSelection({
+          event_id: data.id,
+          max_photos: formData.max_photos || 100,
+        });
+      } catch (selErr) {
+        console.error("Error creating selection portal:", selErr);
+        alert("Warning: Photo selection portal could not be initialized automatically. You may need to enable it manually in the event settings.");
+      }
+
       // Send System Message if created from chat
       if (sourceConversationId) {
         try {
+          const galleryUrl = `${window.location.origin}/gallery/${data.id}`;
           await supabase.from("messages").insert({
             conversation_id: sourceConversationId,
             sender_id: user.id,
-            content: `📸 Event created: "${formData.name}". You can now view the gallery in your dashboard.`,
+            content: `📸 Event created: "${formData.name}". You can now view and select photos here: ${galleryUrl}`,
             message_type: "event_created",
-            metadata: { event_id: data.id, event_name: formData.name },
+            metadata: { 
+              event_id: data.id, 
+              event_name: formData.name,
+              gallery_url: galleryUrl
+            },
           });
         } catch (msgErr) {
-          console.error("Non-blocking error sending system message:", msgErr);
+          console.error("Non-blocking error during chat message automation:", msgErr);
         }
       }
 

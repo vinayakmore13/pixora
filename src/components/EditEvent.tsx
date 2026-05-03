@@ -38,6 +38,7 @@ export function EditEvent() {
         event_date: '',
         location: '',
         cover_image_url: '',
+        upload_password_hash: '',
         max_photos: 5000,
         allow_guest_uploads: true,
         moderate_guest_photos: false,
@@ -73,6 +74,7 @@ export function EditEvent() {
                 event_date: data.event_date ? new Date(data.event_date).toISOString().slice(0, 16) : '',
                 location: data.location || '',
                 cover_image_url: data.cover_image_url || '',
+                upload_password_hash: data.upload_password_hash || '',
                 max_photos: data.max_photos,
                 allow_guest_uploads: data.allow_guest_uploads ?? true,
                 moderate_guest_photos: data.moderate_guest_photos ?? false,
@@ -113,6 +115,7 @@ export function EditEvent() {
                     event_date: formData.event_date ? new Date(formData.event_date).toISOString() : null,
                     location: formData.location || null,
                     cover_image_url: formData.cover_image_url || null,
+                    upload_password_hash: formData.upload_password_hash,
                     max_photos: formData.max_photos,
                     allow_guest_uploads: formData.allow_guest_uploads,
                     moderate_guest_photos: formData.moderate_guest_photos,
@@ -265,6 +268,21 @@ export function EditEvent() {
                                         value={formData.cover_image_url}
                                         onChange={handleInputChange}
                                         placeholder="https://example.com/image.jpg"
+                                        className="w-full bg-surface-container-low border border-outline-variant/10 rounded-xl py-3 pl-10 pr-4 text-on-surface placeholder:text-on-surface-variant/50 focus:ring-1 focus:ring-primary outline-none"
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-on-surface-variant mb-2">Gallery Access Password</label>
+                                <div className="relative">
+                                    <Users className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant" size={20} />
+                                    <input
+                                        type="text"
+                                        name="upload_password_hash"
+                                        value={formData.upload_password_hash}
+                                        onChange={handleInputChange}
+                                        placeholder="e.g., GUEST123"
                                         className="w-full bg-surface-container-low border border-outline-variant/10 rounded-xl py-3 pl-10 pr-4 text-on-surface placeholder:text-on-surface-variant/50 focus:ring-1 focus:ring-primary outline-none"
                                     />
                                 </div>

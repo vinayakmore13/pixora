@@ -26,7 +26,6 @@ import { useAuth } from "../contexts/AuthContext";
 import { supabase } from "../lib/supabaseClient";
 import { cn, slugify } from "../lib/utils";
 import { azureStorageProvider } from "../lib/providers/azureStorageProvider";
-import { ClientSelections } from "./ClientSelections";
 
 interface Event {
   id: string;
@@ -58,7 +57,7 @@ export function EventManagement() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [activeTab, setActiveTab] = useState<
-    "overview" | "selections" | "guests" | "sharing"
+    "overview" | "sharing" | "settings"
   >("overview");
   const [guestStats, setGuestStats] = useState({
     registrations: 0,
@@ -141,7 +140,16 @@ export function EventManagement() {
     }
   }
 
-  const handleCopy = () => {
+  const handleCopyLink = () => {
+    if (event) {
+      const url = `${window.location.origin}/gallery/${event.id}`;
+      navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const handleCopyPassword = () => {
     if (event) {
       navigator.clipboard.writeText(event.upload_password_hash);
       setCopied(true);
@@ -442,6 +450,20 @@ export function EventManagement() {
           </div>
           <div className="flex gap-4">
             <Link
+              to={`/upload?event=${event.id}`}
+              className="bg-white border border-outline-variant/20 text-on-surface px-6 py-3 rounded-full font-bold flex items-center gap-2 hover:bg-surface-container-low transition-all"
+            >
+              <Upload size={18} />
+              Upload Photos
+            </Link>
+            <Link
+              to={`/gallery/${event.id}`}
+              className="signature-gradient text-white px-6 py-3 rounded-full font-bold flex items-center gap-2 shadow-lg shadow-primary/20 hover:brightness-110 active:scale-95 transition-all"
+            >
+              <LayoutGrid size={18} />
+              View Gallery
+            </Link>
+            <Link
               to={`/event/${event.id}/edit`}
               className="bg-white border border-outline-variant/20 text-on-surface px-6 py-3 rounded-full font-bold flex items-center gap-2 hover:bg-surface-container-low transition-all"
             >
@@ -471,31 +493,7 @@ export function EventManagement() {
               )}
             >
               <QrCode size={16} />
-              QR Code
-            </button>
-            <button
-              onClick={() => setActiveTab("selections")}
-              className={cn(
-                "pb-4 font-bold text-sm border-b-2 transition-colors whitespace-nowrap flex items-center gap-2",
-                activeTab === "selections"
-                  ? "border-primary text-primary"
-                  : "border-transparent text-on-surface-variant hover:text-on-surface hover:border-outline-variant/30",
-              )}
-            >
-              <LayoutGrid size={16} />
-              Fast Selection
-            </button>
-            <button
-              onClick={() => setActiveTab("guests")}
-              className={cn(
-                "pb-4 font-bold text-sm border-b-2 transition-colors whitespace-nowrap flex items-center gap-2",
-                activeTab === "guests"
-                  ? "border-primary text-primary"
-                  : "border-transparent text-on-surface-variant hover:text-on-surface hover:border-outline-variant/30",
-              )}
-            >
-              <Sparkles size={16} />
-              Guest Delivery
+              Sharing & Access
             </button>
             <button
               onClick={() => setActiveTab("sharing")}
@@ -506,55 +504,84 @@ export function EventManagement() {
                   : "border-transparent text-on-surface-variant hover:text-on-surface hover:border-outline-variant/30",
               )}
             >
-              <Share2 size={16} />
-              AI Share Link
+              <Sparkles size={16} />
+              AI Smart Share
+            </button>
+            <button
+              onClick={() => setActiveTab("settings")}
+              className={cn(
+                "pb-4 font-bold text-sm border-b-2 transition-colors whitespace-nowrap flex items-center gap-2",
+                activeTab === "settings"
+                  ? "border-primary text-primary"
+                  : "border-transparent text-on-surface-variant hover:text-on-surface hover:border-outline-variant/30",
+              )}
+            >
+              <LayoutGrid size={16} />
+              Event Settings
             </button>
           </div>
         </div>
 
-        {/* Quick Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-            <div className="bg-white p-5 rounded-3xl silk-shadow border border-outline-variant/5">
-                <div className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">Registered Guests</div>
-                <div className="text-2xl font-bold text-on-surface">{guestStats.registrations}</div>
-            </div>
-            <div className="bg-white p-5 rounded-3xl silk-shadow border border-outline-variant/5">
-                <div className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">AI Matches Found</div>
-                <div className="text-2xl font-bold text-primary">{guestStats.matches}</div>
-            </div>
-            <div className="bg-white p-5 rounded-3xl silk-shadow border border-outline-variant/5">
-                <div className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">Photos Scanned</div>
-                <div className="text-2xl font-bold text-on-surface">{guestStats.totalPhotos}</div>
-            </div>
-            <div className="bg-white p-5 rounded-3xl silk-shadow border border-outline-variant/5">
-                <div className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">Engagement Rate</div>
-                <div className="text-2xl font-bold text-secondary">
-                    {guestStats.registrations > 0 ? Math.round((guestStats.matches / guestStats.registrations) * 100) : 0}%
-                </div>
-            </div>
-        </div>
-
         {/* Tab Content */}
         {activeTab === "overview" ? (
-          /* ─── QR CODE ONLY (Clean Overview) ─── */
-          <div className="max-w-2xl mx-auto">
-            <div className="bg-white p-8 md:p-10 rounded-[2.5rem] silk-shadow border border-outline-variant/5">
-              <div className="flex justify-between items-center mb-8">
-                <h3 className="text-2xl font-bold text-on-surface">
-                  Guest QR Code
-                </h3>
-                <div className={cn(
-                  "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest",
-                  event.status === 'live' ? "bg-green-100 text-green-700" :
-                  event.status === 'upcoming' ? "bg-yellow-100 text-yellow-700" :
-                  "bg-gray-100 text-gray-700"
-                )}>
-                  {event.status}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Gallery Link & Password Card */}
+            <div className="bg-white p-8 rounded-[2.5rem] silk-shadow border border-outline-variant/5">
+              <h3 className="text-2xl font-bold text-on-surface mb-8">Share Gallery</h3>
+              
+              <div className="space-y-6">
+                {/* Unified Gallery Link */}
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Gallery Link</label>
+                  <div className="bg-surface-container-low rounded-2xl p-4 flex items-center gap-3 border border-outline-variant/10">
+                    <div className="flex-1 text-sm font-mono text-on-surface truncate">
+                      {window.location.origin}/gallery/{event.id}
+                    </div>
+                    <button
+                      onClick={handleCopyLink}
+                      className="p-2 bg-white rounded-xl text-on-surface-variant hover:text-primary transition-all active:scale-90"
+                    >
+                      {copied ? <Check size={16} className="text-green-600" /> : <Copy size={16} />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Password Access */}
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Access Password</label>
+                  <div className="bg-surface-container-low rounded-2xl p-4 flex items-center gap-3 border border-outline-variant/10">
+                    <div className="flex-1 text-lg font-mono font-bold text-primary tracking-wider">
+                      {event.upload_password_hash}
+                    </div>
+                    <button
+                      onClick={handleCopyPassword}
+                      className="p-2 bg-white rounded-xl text-on-surface-variant hover:text-primary transition-all active:scale-90"
+                    >
+                      {copied ? <Check size={16} className="text-green-600" /> : <Copy size={16} />}
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-on-surface-variant font-medium mt-2 flex items-center gap-1">
+                    <Lock size={10} />
+                    This password is required for clients to view the gallery.
+                  </p>
+                </div>
+
+                <div className="pt-6">
+                  <Link
+                    to={`/gallery/${event.id}`}
+                    className="w-full bg-on-surface text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-on-surface/90 transition-all shadow-lg active:scale-[0.98]"
+                  >
+                    <LayoutGrid size={18} />
+                    Open Live Gallery
+                  </Link>
                 </div>
               </div>
+            </div>
 
-              {/* QR Image */}
-              <div className="bg-surface-container-low p-8 rounded-3xl flex flex-col items-center mb-8">
+            {/* Guest QR Code */}
+            <div className="bg-white p-8 rounded-[2.5rem] silk-shadow border border-outline-variant/5 text-center">
+              <h3 className="text-2xl font-bold text-on-surface mb-8 text-left">Guest Access</h3>
+              <div className="bg-surface-container-low p-8 rounded-3xl flex flex-col items-center">
                 <div className="bg-white p-5 rounded-2xl shadow-sm mb-6">
                   <img
                     src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`${window.location.origin}/e/${event.guest_qr_code || event.id}`)}`}
@@ -562,94 +589,122 @@ export function EventManagement() {
                     width={200}
                     height={200}
                     className="rounded-lg"
-                    id="event-qr-img"
                   />
                 </div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-2">
-                  Scan to access event
-                </p>
-                <p className="text-3xl font-mono font-bold text-on-surface tracking-widest">
+                <p className="text-3xl font-mono font-bold text-on-surface tracking-[0.3em] mb-2">
                   {event.guest_qr_code || '---'}
                 </p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                  Event Code
+                </p>
               </div>
-
-              {/* Actions */}
-              <div className="flex gap-3 mb-6">
+              <div className="flex gap-4 mt-8">
                 <a
                   href={`https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(`${window.location.origin}/e/${event.guest_qr_code || event.id}`)}&format=png`}
                   download={`qr-${event.guest_qr_code || event.id}.png`}
-                  className="flex-1 bg-on-surface text-white py-4 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-on-surface/90 transition-all active:scale-[0.98]"
+                  className="flex-1 bg-white border border-outline-variant/20 py-4 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 text-on-surface hover:bg-surface-container-low transition-all"
                 >
                   <Download size={18} />
-                  Download QR
+                  Download
                 </a>
                 <button
                   onClick={() => {
                     const url = `${window.location.origin}/e/${event.guest_qr_code || event.id}`;
-                    if (navigator.share) {
-                      navigator.share({ title: event.name, url });
-                    } else {
-                      navigator.clipboard.writeText(url);
-                      setCopied(true);
-                      setTimeout(() => setCopied(false), 2000);
-                    }
-                  }}
-                  className="flex-1 bg-white border border-outline-variant/20 py-4 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 text-on-surface hover:bg-surface-container-low transition-all active:scale-[0.98]"
-                >
-                  {copied ? <Check size={18} className="text-green-600" /> : <Share2 size={18} />}
-                  {copied ? "Copied!" : "Share Link"}
-                </button>
-              </div>
-
-              {/* Guest Link Preview */}
-              <div className="bg-surface-container-low rounded-2xl p-4 flex items-center gap-3">
-                <div className="flex-1 text-sm font-mono text-on-surface-variant truncate">
-                  {window.location.origin}/e/{event.guest_qr_code || event.id}
-                </div>
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(`${window.location.origin}/e/${event.guest_qr_code || event.id}`);
+                    navigator.clipboard.writeText(url);
                     setCopied(true);
                     setTimeout(() => setCopied(false), 2000);
                   }}
-                  className="p-2 bg-white rounded-xl text-on-surface-variant hover:text-primary transition-colors"
+                  className="flex-1 bg-primary/10 text-primary py-4 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-primary/20 transition-all"
                 >
-                  {copied ? <Check size={16} className="text-green-600" /> : <Copy size={16} />}
+                  <Share2 size={18} />
+                  Share Link
                 </button>
               </div>
+            </div>
+          </div>
+        ) : activeTab === "sharing" ? (
+          <SmartShareManager eventId={event.id} />
+        ) : (
+          <div className="max-w-3xl mx-auto space-y-8">
+            {/* Quick Stats */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-white p-5 rounded-3xl silk-shadow border border-outline-variant/5">
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">Guests</div>
+                    <div className="text-2xl font-bold text-on-surface">{guestStats.registrations}</div>
+                </div>
+                <div className="bg-white p-5 rounded-3xl silk-shadow border border-outline-variant/5">
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">Matches</div>
+                    <div className="text-2xl font-bold text-primary">{guestStats.matches}</div>
+                </div>
+                <div className="bg-white p-5 rounded-3xl silk-shadow border border-outline-variant/5">
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">Total Photos</div>
+                    <div className="text-2xl font-bold text-on-surface">{guestStats.totalPhotos}</div>
+                </div>
+                <div className="bg-white p-5 rounded-3xl silk-shadow border border-outline-variant/5">
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">Engagement</div>
+                    <div className="text-2xl font-bold text-secondary">
+                        {guestStats.registrations > 0 ? Math.round((guestStats.matches / guestStats.registrations) * 100) : 0}%
+                    </div>
+                </div>
+            </div>
 
-              {/* AI Toggle */}
-              <div className="mt-6 pt-6 border-t border-outline-variant/10">
+            <div className="bg-white p-8 rounded-[2.5rem] silk-shadow border border-outline-variant/5">
+              <h3 className="text-xl font-bold text-on-surface mb-8">Permissions & Automation</h3>
+              <div className="space-y-6">
                 <PermissionItem
                   label="Enable AI photo finder for guests"
                   checked={event.ai_enabled}
                   onChange={handleToggleAiFinder}
                 />
-              </div>
-
-              {/* Quick Links */}
-              <div className="mt-6 flex gap-3">
-                <Link
-                  to={`/gallery/${event.id}`}
-                  className="flex-1 text-center text-primary font-bold text-sm py-3 rounded-2xl bg-primary/5 hover:bg-primary/10 transition-all"
-                >
-                  View Gallery →
-                </Link>
-                <Link
-                  to="/upload"
-                  className="flex-1 text-center text-secondary font-bold text-sm py-3 rounded-2xl bg-secondary/5 hover:bg-secondary/10 transition-all"
-                >
-                  Upload Photos →
-                </Link>
+                <div className="h-px bg-outline-variant/10"></div>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <div className="text-sm font-bold text-on-surface">Allow Guest Uploads</div>
+                    <div className="text-xs text-on-surface-variant">Let guests upload their own photos to this event</div>
+                  </div>
+                  <button
+                    onClick={() => {}} // Hooked to Event Edit
+                    className={cn(
+                      "w-12 h-6 rounded-full transition-all relative",
+                      event.allow_guest_uploads ? "bg-primary" : "bg-outline-variant/30"
+                    )}
+                  >
+                    <div className={cn(
+                      "absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-all",
+                      event.allow_guest_uploads ? "right-1" : "left-1"
+                    )}></div>
+                  </button>
+                </div>
+                <div className="h-px bg-outline-variant/10"></div>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <div className="text-sm font-bold text-on-surface">Moderate Photos</div>
+                    <div className="text-xs text-on-surface-variant">Review guest uploads before they go live</div>
+                  </div>
+                  <button
+                    onClick={() => {}} // Hooked to Event Edit
+                    className={cn(
+                      "w-12 h-6 rounded-full transition-all relative",
+                      event.moderate_guest_photos ? "bg-primary" : "bg-outline-variant/30"
+                    )}
+                  >
+                    <div className={cn(
+                      "absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-all",
+                      event.moderate_guest_photos ? "right-1" : "left-1"
+                    )}></div>
+                  </button>
+                </div>
               </div>
             </div>
+
+            <Link
+              to={`/event/${event.id}/edit`}
+              className="w-full bg-surface-container-high text-on-surface py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-surface-container-highest transition-all"
+            >
+              <Edit3 size={18} />
+              Update Full Event Settings
+            </Link>
           </div>
-        ) : activeTab === "selections" ? (
-          <ClientSelections eventId={event.id} />
-        ) : activeTab === "guests" ? (
-          <GuestDeliveryManager eventId={event.id} />
-        ) : (
-          <SmartShareManager eventId={event.id} />
         )}
       </div>
 

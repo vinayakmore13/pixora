@@ -14,6 +14,7 @@ import { usePhotographerBranding } from '../hooks/usePhotographerBranding';
 import { SecureImage } from './SecureImage';
 import { getDeviceFingerprint, logSecurityEvent } from '../lib/securityEngine';
 import { useSearchParams, useNavigate } from 'react-router-dom';
+import { ensurePhotoSelectionPortal } from '../lib/selectionHelpers';
 
 const isHybridAzure = import.meta.env.VITE_AI_PROVIDER === 'AZURE';
 
@@ -21,7 +22,7 @@ export function Gallery() {
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { profile } = useAuth();
+  const { user, profile, loading: authLoading } = useAuth();
   
   // Data State
   const [photos, setPhotos] = useState<PhotoMetadata[]>([]);
@@ -31,6 +32,7 @@ export function Gallery() {
   const [isSecure, setIsSecure] = useState(false);
   const { branding } = usePhotographerBranding(eventData?.user_id);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const isPhotographer = React.useMemo(() => 
     profile?.user_type === 'photographer' || profile?.is_admin || eventData?.user_id === profile?.id
@@ -64,20 +66,16 @@ export function Gallery() {
         let selectionId = selection?.id;
         
         if (!selectionId) {
-          // If no selection portal exists, create a default one
-          const { data: newSel, error: createError } = await supabase
-            .from('photo_selections')
-            .insert({
-              event_id: id,
-              status: 'submitted',
-              max_photos: 50,
-              selection_code: Math.random().toString(36).substring(2, 8).toUpperCase()
-            })
-            .select()
-            .single();
-            
-          if (createError) throw createError;
-          selectionId = newSel.id;
+          // Auto-create selection portal — use event owner as photographer_id
+          const result = await ensurePhotoSelectionPortal(id!);
+          if (result.success && result.id) {
+            selectionId = result.id;
+          } else {
+            console.error('[SUBMIT] Failed to auto-create selection portal:', result.error);
+            alert('Something went wrong. Please try again.');
+            setIsSubmittingSelection(false);
+            return;
+          }
         }
 
         // 2. Ensure guest record exists in photo_selection_guests
@@ -138,11 +136,14 @@ export function Gallery() {
           
         if (favError) throw favError;
 
-        // 3. Update status to submitted
+        // 4. Update guest status to submitted
         await supabase
-          .from('photo_selections')
-          .update({ status: 'submitted' })
-          .eq('id', selectionId);
+          .from('photo_selection_guests')
+          .update({ 
+            status: 'submitted',
+            submitted_at: new Date().toISOString()
+          })
+          .eq('id', guest_id);
 
         alert('Success! Your selections have been sent to the photographer.');
         setIsSelectionMode(false);
@@ -167,12 +168,14 @@ export function Gallery() {
   const [showOnlyMatches, setShowOnlyMatches] = useState(false);
   const [showOnlyClientSelections, setShowOnlyClientSelections] = useState(false);
   const [showOnlyMyPicks, setShowOnlyMyPicks] = useState(false);
+  const [showOnlyMyFavorites, setShowOnlyMyFavorites] = useState(false);
 
-  const [showCompareModal, setShowCompareModal] = useState(false);
-  const [isCompareMode, setIsCompareMode] = useState(false);
-  const [comparePhotos, setComparePhotos] = useState<string[]>([]);
   const [isAIUnlocked, setIsAIUnlocked] = useState(false);
   const [photographerPlan, setPhotographerPlan] = useState<string>('starter');
+  
+  // Selection Portal State
+  const [selectionData, setSelectionData] = useState<any>(null);
+  const [myFavorites, setMyFavorites] = useState<Set<string>>(new Set());
 
   // Intersection Observer for Infinite Scroll
   const observerRef = useRef<IntersectionObserver | null>(null);
@@ -240,14 +243,59 @@ export function Gallery() {
     if (!id) return;
 
     const fetchInitialData = async () => {
-      // Fetch Event Details
-      const { data: event, error: eventError } = await supabase
-        .from('events')
-        .select('name, event_date, user_id')
-        .eq('id', id)
-        .single();
+      try {
+        // Fetch Event Details
+        const { data: event, error: eventError } = await supabase
+          .from('events')
+          .select('name, event_date, user_id')
+          .eq('id', id)
+          .single();
+        
+        if (eventError || !event) {
+          setError('This gallery is no longer available. It may have been deleted or archived by the photographer.');
+          setLoading(false);
+          return;
+        }
+        
+        if (event) setEventData(event);
+
+      // Fetch Selection Portal if exists
+      const { data: selection } = await supabase
+        .from('photo_selections')
+        .select('*')
+        .eq('event_id', id)
+        .maybeSingle();
       
-      if (event) setEventData(event);
+      if (selection) {
+        setSelectionData(selection);
+        
+        // Fetch current user's favorites if logged in
+        if (profile?.id) {
+          const { data: favs } = await supabase
+            .from('photo_favorites')
+            .select('photo_id')
+            .eq('selection_id', selection.id)
+            .eq('guest_id', profile.id);
+          
+          if (favs) {
+            setMyFavorites(new Set(favs.map(f => f.photo_id)));
+          }
+        }
+      } else if (id) {
+        // Auto-initialize selection portal if missing — works for any visitor
+        ensurePhotoSelectionPortal(id).then(res => {
+          if (res.success && res.id) {
+            setSelectionData({ id: res.id, status: 'pending', max_photos: 100 });
+          }
+        }).catch(() => {
+          // Silently fail — RLS may block non-photographers, that's OK
+        });
+      }
+
+      // 1.1 Photographer Management: Load Client Favorites
+      if (isPhotographer) {
+        fetchClientSelections();
+      }
 
       // Fetch Initial Photos
       setLoading(true);
@@ -286,12 +334,24 @@ export function Gallery() {
           if (unlock) setIsAIUnlocked(true);
         }
 
-        if (!isPhotographerUser) {
+        // Security layers:
+        // 1. Photographers / admins / event owners → full access, no security overlay
+        // 2. Logged-in clients (have a profile) → authenticated access, watermarks apply
+        // 3. Anonymous guests (no profile, no session) → redirect to password verify page
+        if (isPhotographerUser) {
+          setIsSecure(false);
+          console.log('[SECURITY] Photographer/owner view: Full access granted.');
+        } else if (!authLoading && profile) {
+          // Logged-in client — they're authenticated via Supabase, no need for session/fp tokens
+          setIsSecure(true);
+          console.log('[SECURITY] Authenticated client view: Watermark layer active.');
+        } else if (!authLoading && !profile) {
+          // Anonymous guest — require session/fp from the verify page
           const session = searchParams.get('session');
           const fp = searchParams.get('fp');
           
           if (!session || !fp) {
-            console.warn('[SECURITY] No session found. Verifying access...');
+            console.warn('[SECURITY] Anonymous access without session. Redirecting to verify...');
             navigate(`/gallery/verify?token=${id}`);
             return;
           }
@@ -303,18 +363,55 @@ export function Gallery() {
              return;
           }
           logSecurityEvent(session, 'page_view');
-        } else {
-          setIsSecure(false);
-          console.log('[SECURITY] Management view: Protective layer disabled.');
         }
       } catch (err) {
         console.error('[SECURITY] Verification failed', err);
       }
-    };
+    } catch (err) {
+      console.error('[GALLERY] Fetch error:', err);
+      setError('Failed to load gallery. Please try again later.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
     fetchInitialData();
 
-    // Subscribe to photo status updates
+    // Subscribe to favorites changes for the photographer
+    let favoritesSubscription: any = null;
+    if (isPhotographer && id) {
+      supabase
+        .from('photo_selections')
+        .select('id')
+        .eq('event_id', id)
+        .maybeSingle()
+        .then(({ data: selection }) => {
+          if (selection) {
+            favoritesSubscription = supabase
+              .channel(`favorites-${selection.id}`)
+              .on(
+                'postgres_changes',
+                {
+                  event: '*',
+                  schema: 'public',
+                  table: 'photo_favorites',
+                  filter: `selection_id=eq.${selection.id}`
+                },
+                () => {
+                  fetchClientSelections();
+                }
+              )
+              .subscribe();
+          }
+        });
+    }
+
+    return () => {
+      if (favoritesSubscription) supabase.removeChannel(favoritesSubscription);
+    };
+  }, [id, profile?.id, isPhotographer, fetchClientSelections, authLoading]);
+
+  useEffect(() => {
     const photosChannel = supabase
       .channel('gallery_photos_realtime')
       .on('postgres_changes', { 
@@ -493,6 +590,44 @@ export function Gallery() {
     await downloadSingleImage(photo.file_path, filename);
   };
 
+  const handleToggleFavorite = async (photoId: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (!selectionData || !profile?.id) {
+      if (!profile?.id) alert('Please sign in to favorite photos.');
+      return;
+    }
+
+    const isFav = myFavorites.has(photoId);
+    try {
+      if (isFav) {
+        setMyFavorites(prev => {
+          const next = new Set(prev);
+          next.delete(photoId);
+          return next;
+        });
+        await supabase
+          .from('photo_favorites')
+          .delete()
+          .match({ 
+            selection_id: selectionData.id, 
+            photo_id: photoId, 
+            guest_id: profile.id 
+          });
+      } else {
+        setMyFavorites(prev => new Set(prev).add(photoId));
+        await supabase
+          .from('photo_favorites')
+          .insert({ 
+            selection_id: selectionData.id, 
+            photo_id: photoId, 
+            guest_id: profile.id 
+          });
+      }
+    } catch (err) {
+      console.error('Favorite toggle failed:', err);
+    }
+  };
+
   const handleBulkDownload = async () => {
     if (selectedPhotoIds.size === 0) return;
     
@@ -544,9 +679,38 @@ export function Gallery() {
     ? clientSelectedPhotos 
     : (showOnlyMatches 
         ? matchedPhotos 
-        : (showOnlyMyPicks 
-            ? photos.filter(p => selectedPhotoIds.has(p.id)) 
-            : photos));
+        : (showOnlyMyFavorites
+            ? photos.filter(p => myFavorites.has(p.id))
+            : (showOnlyMyPicks 
+                ? photos.filter(p => selectedPhotoIds.has(p.id)) 
+                : photos)));
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-[#0a0a0a] text-white flex flex-col items-center justify-center p-8 text-center font-serif">
+        <div className="max-w-md space-y-8 animate-in fade-in zoom-in duration-500">
+          <div className="w-24 h-24 bg-red-500/10 rounded-[2.5rem] flex items-center justify-center mx-auto mb-8 border border-red-500/20 shadow-2xl shadow-red-500/5">
+            <X size={48} className="text-red-500" />
+          </div>
+          <div className="space-y-4">
+            <h1 className="text-4xl font-bold tracking-tight">Gallery Unavailable</h1>
+            <p className="text-white/60 leading-relaxed text-lg">
+              {error}
+            </p>
+          </div>
+          <div className="pt-8">
+            <Link 
+              to="/dashboard" 
+              className="inline-flex items-center gap-2 px-8 py-4 bg-white/5 border border-white/10 rounded-full text-sm font-bold uppercase tracking-widest hover:bg-white/10 transition-all"
+            >
+              <ChevronLeft size={18} />
+              Return to Dashboard
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white pt-24 pb-20 px-8 no-screenshot">
@@ -627,11 +791,24 @@ export function Gallery() {
         {/* Filters */}
         <div className="relative">
           <div className="flex gap-4 mb-12 overflow-x-auto pb-4 no-scrollbar">
-            <FilterChip label="All Photos" active={!showOnlyMatches && !showOnlyClientSelections && !showOnlyMyPicks} onClick={() => {
+            <FilterChip label="All Photos" active={!showOnlyMatches && !showOnlyClientSelections && !showOnlyMyPicks && !showOnlyMyFavorites} onClick={() => {
               setShowOnlyMatches(false);
               setShowOnlyClientSelections(false);
               setShowOnlyMyPicks(false);
+              setShowOnlyMyFavorites(false);
             }} />
+            
+            {selectionData && !isPhotographer && (
+              <FilterChip 
+                label={`My Favorites (${myFavorites.size})`} 
+                active={showOnlyMyFavorites} 
+                onClick={() => {
+                  setShowOnlyMyFavorites(!showOnlyMyFavorites);
+                  setShowOnlyMatches(false);
+                  setShowOnlyMyPicks(false);
+                }} 
+              />
+            )}
             
             {isPhotographer && clientSelectedPhotos.length > 0 && (
               <FilterChip 
@@ -667,9 +844,6 @@ export function Gallery() {
                 setShowOnlyMyPicks(false);
               }} />
             )}
-            <FilterChip label="Ceremony" />
-            <FilterChip label="Reception" />
-            <FilterChip label="Guest Candid" />
           </div>
         </div>
 
@@ -730,6 +904,22 @@ export function Gallery() {
                         >
                           <Download size={18} />
                         </button>
+                        
+                        {/* Favorite Button for Guests */}
+                        {selectionData && !isPhotographer && (
+                          <button 
+                            onClick={(e) => handleToggleFavorite(photo.id, e)}
+                            className={cn(
+                              "p-2 backdrop-blur-md rounded-full transition-all border",
+                              myFavorites.has(photo.id) 
+                                ? "bg-rose-500 border-rose-500 text-white" 
+                                : "bg-white/10 border-white/20 hover:bg-white/20 text-white"
+                            )}
+                          >
+                            <Heart size={18} fill={myFavorites.has(photo.id) ? "currentColor" : "none"} />
+                          </button>
+                        )}
+
                         {isPhotographer && (
                           <button 
                             onClick={(e) => handleDeletePhoto(photo, e)}
@@ -1083,25 +1273,6 @@ export function Gallery() {
               </button>
 
               <div className="h-8 w-px bg-white/10 mx-2" />
-
-              <button
-                onClick={() => {
-                  setIsCompareMode(!isCompareMode);
-                  if (!isCompareMode) {
-                    setComparePhotos(Array.from(selectedPhotoIds).slice(0, 4));
-                    setShowCompareModal(true);
-                  } else {
-                    setShowCompareModal(false);
-                  }
-                }}
-                className={cn(
-                  "px-6 py-2 rounded-full font-bold text-sm transition-all flex items-center gap-2",
-                  isCompareMode ? "bg-primary text-white" : "bg-white/5 text-white/70 hover:bg-white/10"
-                )}
-              >
-                <LayoutGrid size={18} />
-                Compare Side-by-Side
-              </button>
             </div>
 
             {!isPhotographer && (
@@ -1122,78 +1293,7 @@ export function Gallery() {
         )}
       </AnimatePresence>
 
-      {/* Compare Modal */}
-      {showCompareModal && comparePhotos.length > 0 && (
-        <div className="fixed inset-0 bg-black/98 z-[200] flex flex-col">
-          <div className="p-6 flex justify-between items-center text-white border-b border-white/10 bg-black/50 backdrop-blur-md">
-            <div>
-              <h2 className="text-xl font-bold">Compare Selection</h2>
-              <p className="text-xs text-white/50">{comparePhotos.length} photos chosen for comparison</p>
-            </div>
-            <button 
-              onClick={() => {
-                setShowCompareModal(false);
-                setIsCompareMode(false);
-              }} 
-              className="p-3 hover:bg-white/10 rounded-full transition-colors"
-            >
-              <X size={24} />
-            </button>
-          </div>
-          <div className={cn(
-            "flex-1 p-6 grid gap-6 overflow-auto",
-            comparePhotos.length === 1 ? "grid-cols-1" : 
-            comparePhotos.length === 2 ? "grid-cols-2" : 
-            comparePhotos.length === 3 ? "grid-cols-3" : 
-            "grid-cols-2 grid-rows-2"
-          )}>
-            {comparePhotos.map(photoId => {
-              const photo = photos.find(p => p.id === photoId) || clientSelectedPhotos.find(p => p.id === photoId);
-              if (!photo) return null;
-              
-              const isFav = selectedPhotoIds.has(photo.id);
-              const imageUrl = getPhotoPublicUrl(photo.file_path);
-              
-              return (
-                <div key={photoId} className="relative flex flex-col items-center justify-center bg-white/5 rounded-3xl overflow-hidden group border border-white/10">
-                  <img src={imageUrl} alt="Compare" className="max-w-full max-h-full object-contain p-4" />
-                  
-                  <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-4">
-                    <button
-                      onClick={(e) => toggleSelection(photo.id, e as any)}
-                      className={cn(
-                        "p-4 rounded-full shadow-2xl transition-all",
-                        isFav ? "bg-primary text-white scale-110" : "bg-white/90 text-gray-900 hover:bg-primary hover:text-white"
-                      )}
-                    >
-                      <Heart size={24} className={cn(isFav && "fill-current")} />
-                    </button>
-                    <button
-                      onClick={() => {
-                        setComparePhotos(prev => prev.filter(id => id !== photoId));
-                      }}
-                      className="p-4 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-2xl"
-                    >
-                      <X size={20} />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          {comparePhotos.length === 0 && (
-            <div className="flex-1 flex flex-col items-center justify-center text-white/40">
-              <p>No photos selected for comparison.</p>
-              <button 
-                onClick={() => setShowCompareModal(false)}
-                className="mt-4 text-primary font-bold hover:underline"
-              >
-                Close Comparison
-              </button>
-            </div>
-          )}
-        </div>
-      )}
+      {/* Compare Modal Removed for Simplicity */}
     </div>
   );
 }
